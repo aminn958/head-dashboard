@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>داشبورد هد های خراب دستگاه ها</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/3.24.0/js/msal-browser.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: Tahoma, Arial, sans-serif;
+    background: #f5f4f0;
+    color: #1a1a19;
+    margin: 0;
+    padding: 24px;
+  }
+  .container { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 20px; }
+  .filters { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end; }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }
+  .filter-group label { font-size: 12px; color: #6b6a65; }
+  select {
+    padding: 8px 12px; font-size: 14px;
+    border: 1px solid #c3c2b7; border-radius: 8px; background: #fff; color: #1a1a19; width: 100%;
+  }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; margin-bottom: 24px; }
+  .metric-card { background: #fff; border: 1px solid #e1e0d9; border-radius: 10px; padding: 14px 16px; }
+  .metric-label { font-size: 13px; color: #6b6a65; margin-bottom: 4px; }
+  .metric-value { font-size: 26px; font-weight: 700; }
+  .section-title { font-size: 16px; font-weight: 700; margin: 28px 0 10px; }
+  .chart-wrap { position: relative; height: 460px; background: #fff; border: 1px solid #e1e0d9; border-radius: 10px; padding: 16px; margin-bottom: 8px; }
+  .trend-header { display: flex; align-items: center; justify-content: space-between; margin: 28px 0 10px; }
+  .trend-buttons { display: flex; gap: 6px; }
+  .trend-buttons button {
+    padding: 6px 14px; font-size: 13px; border: 1px solid #c3c2b7; border-radius: 8px;
+    background: #fff; color: #1a1a19; cursor: pointer;
+  }
+  .trend-buttons button.active { background: #2a78d6; color: #fff; border-color: #2a78d6; }
+  .trend-chart-wrap { position: relative; height: 300px; background: #fff; border: 1px solid #e1e0d9; border-radius: 10px; padding: 16px; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e1e0d9; border-radius: 10px; overflow: hidden; }
+  th, td { padding: 10px 8px; font-size: 13px; text-align: right; vertical-align: top; }
+  th { background: #f0efe9; color: #6b6a65; font-weight: 600; font-size: 12px; }
+  td { border-top: 1px solid #e1e0d9; }
+  th:nth-child(2), th:nth-child(3), td:nth-child(2), td:nth-child(3) { text-align: center; white-space: nowrap; }
+  .muted { color: #9b9a94; font-size: 12px; }
+  .head-badge {
+    display: inline-block; background: #fbeaf0; color: #4b1528; border-radius: 6px;
+    padding: 2px 7px; font-size: 12px; margin: 2px 3px 2px 0;
+  }
+  .legend-note { font-size: 12px; color: #6b6a65; margin: -2px 0 10px; }
+  .prod-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .prod-card { background: #fff; border: 1px solid #e1e0d9; border-radius: 10px; padding: 16px; }
+  .prod-card-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+  .prod-chart-wrap { position: relative; height: 260px; }
+  .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap: 16px; margin-bottom: 8px; }
+  .gauge-card { background: #fff; border: 1px solid #e1e0d9; border-radius: 10px; padding: 16px; text-align: center; }
+  .gauge-card-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .gauge-card canvas { width: 100%; max-width: 220px; height: 180px; }
+  .gauge-value { font-size: 13px; color: #6b6a65; margin-top: 6px; }
+  .monthly-chart-wrap { position: relative; height: 340px; background: #fff; border: 1px solid #e1e0d9; border-radius: 10px; padding: 16px; margin-bottom: 8px; }
+  .upload-bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: #fff; border: 1px solid #e1e0d9; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;
+  }
+  .upload-btn {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    background: #2a78d6; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    border: none; white-space: nowrap;
+  }
+  .upload-btn:hover { background: #2166bd; }
+  #fileInput { display: none; }
+  .upload-status { font-size: 12px; color: #6b6a65; flex: 1; min-width: 200px; }
+  .upload-status.ok { color: #2e8f4f; }
+  .upload-status.err { color: #c0392b; }
+  footer { margin-top: 24px; font-size: 12px; color: #9b9a94; text-align: center; }
+  .od-modal-overlay {
+    position: fixed; inset: 0; background: rgba(20,20,18,0.45);
+    display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px;
+  }
+  .od-modal {
+    background: #fff; border-radius: 12px; width: 100%; max-width: 480px; max-height: 72vh;
+    display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+  }
+  .od-modal-header { display: flex; align-items: center; gap: 8px; padding: 14px; border-bottom: 1px solid #e1e0d9; }
+  .od-modal-header input {
+    flex: 1; padding: 8px 10px; border: 1px solid #c3c2b7; border-radius: 8px; font-size: 13px; font-family: inherit;
+  }
+  .od-modal-header button {
+    border: none; background: #f0efe9; border-radius: 8px; width: 32px; height: 32px; cursor: pointer; font-size: 14px;
+  }
+  .od-modal-list { overflow-y: auto; padding: 6px; }
+  .od-item { padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+  .od-item:hover { background: #f0efe9; }
+  .od-item-excel { font-weight: 600; color: #1a4d8f; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>داشبورد هد های خراب دستگاه ها</h1>
+
+  <div class="upload-bar">
+    <button id="btnSignIn" class="upload-btn">🔐 ورود با مایکروسافت</button>
+    <button id="btnPickOD" class="upload-btn" style="background:#2e8f4f;" hidden>☁️ انتخاب فایل از OneDrive</button>
+    <button id="btnRefresh" class="upload-btn" style="border:none;" hidden>🔄 بروزرسانی</button>
+    <label class="upload-btn" for="fileInput" style="background:#9b9a94;">📂 فایل محلی (جایگزین)</label>
+    <input type="file" id="fileInput" accept=".xlsb,.xlsx,.xls">
+    <div class="upload-status" id="uploadStatus">برای اتصال زنده به OneDrive، روی «ورود با مایکروسافت» بزنید و فایل اکسل را یک‌بار از OneDrive انتخاب کنید — از آن پس با هر تغییر در اکسل، داشبورد خودکار بروزرسانی می‌شود.</div>
+  </div>
+
+  <div id="odModal" class="od-modal-overlay" hidden>
+    <div class="od-modal">
+      <div class="od-modal-header">
+        <input type="text" id="odSearch" placeholder="جستجوی نام فایل اکسل در OneDrive...">
+        <button id="odModalClose" type="button">✕</button>
+      </div>
+      <div class="od-modal-list" id="odList"></div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="filter-group">
+      <label>دستگاه</label>
+      <select id="fMachine"></select>
+    </div>
+    <div class="filter-group">
+      <label>از تاریخ</label>
+      <select id="fDateStart"></select>
+    </div>
+    <div class="filter-group">
+      <label>تا تاریخ</label>
+      <select id="fDateEnd"></select>
+    </div>
+  </div>
+  <div class="metrics" id="metrics"></div>
+
+  <div class="section-title">انواع خرابی (از زیاد به کم)</div>
+  <div class="chart-wrap">
+    <canvas id="chart" role="img" aria-label="نمودار میله‌ای انواع خرابی هد دستگاه‌ها، مرتب شده از بیشترین به کمترین تعداد، با عدد روی هر میله"></canvas>
+  </div>
+
+  <div class="trend-header">
+    <div class="section-title" style="margin:0;">روند زمانی خرابی‌ها</div>
+    <div class="trend-buttons">
+      <button id="btnDaily" class="active">روزانه</button>
+      <button id="btnWeekly">هفتگی</button>
+    </div>
+  </div>
+  <div class="trend-chart-wrap">
+    <canvas id="trendChart" role="img" aria-label="نمودار خطی روند زمانی تعداد هد خراب به تفکیک روز یا هفته، با عدد روی هر نقطه"></canvas>
+  </div>
+
+  <div class="section-title">خرابی‌های پرتکرار (تعداد روزهای وقوع و هدهای درگیر)</div>
+  <div id="recurTable"></div>
+
+  <div class="section-title">تولید نفر ساعت روزانه (kg)</div>
+  <div class="legend-note">بر اساس شیت‌های شاخص بسته‌بندی، شل پیچ، سفت پیچ و رنگرزی روزانه — بازه تاریخ از فیلترهای بالا اعمال می‌شود</div>
+  <div class="prod-grid" id="prodGrid"></div>
+
+  <div class="trend-header">
+    <div class="section-title" style="margin:0;">وضعیت تولید نفر ساعت یک روز (گیج)</div>
+    <div class="filter-group" style="min-width:160px;">
+      <select id="fGaugeDate"></select>
+    </div>
+  </div>
+  <div class="gauge-grid" id="gaugeGrid"></div>
+
+  <div class="section-title">میزان تولید نفر ساعت ماهانه (kg)</div>
+  <div class="monthly-chart-wrap">
+    <canvas id="monthlyChart" role="img" aria-label="نمودار میله‌ای تولید نفر ساعت ماهانه به تفکیک بخش بسته‌بندی، شل پیچ، سفت پیچ و رنگرزی"></canvas>
+  </div>
+
+  <footer>تولید شده از داده‌های شیت «ثبت هد های خراب دستگاه ها» و شیت‌های شاخص روزانه</footer>
+</div>
+
+<script>
+let DATA = [{"date":"1405/04/15","machine":"SSM 2","desc":"خرابی سیم نخ بر","count":9,"heads":["3","21","29","37","38","43","81","84","67"]},{"date":"1405/04/15","machine":"SSM 2","desc":"خرابی نخ بر","count":8,"heads":["11","33","39","41","42","95","96","57"]},{"date":"1405/04/15","machine":"SSM 2","desc":"نداشتن موتورتراورس","count":2,"heads":["5","50"]},{"date":"1405/04/15","machine":"SSM 2","desc":"ضربدری","count":1,"heads":["52"]},{"date":"1405/04/15","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/04/15","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/04/15","machine":"SSM 2","desc":"نخ بر ندارد","count":1,"heads":["7"]},{"date":"1405/04/15","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/15","machine":"SSM 2","desc":"Digitens","count":1,"heads":["6"]},{"date":"1405/04/15","machine":"SSM 3","desc":"ضربدری","count":8,"heads":["2","10","79","80","78","54","66","6"]},{"date":"1405/04/15","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["3"]},{"date":"1405/04/15","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/15","machine":"SSM 3","desc":"Digitens","count":5,"heads":["25","45","58","72","39"]},{"date":"1405/04/15","machine":"SSM 3","desc":"خرابی موتور تراورس","count":1,"heads":["36"]},{"date":"1405/04/15","machine":"SSM 3","desc":"خرابی سیم نخ بر","count":1,"heads":["51"]},{"date":"1405/04/15","machine":"SSM 3","desc":"Error drive","count":1,"heads":["61"]},{"date":"1405/04/15","machine":"SSM 3","desc":"خرابی نخ بر","count":4,"heads":["70","9","23","81"]},{"date":"1405/04/15","machine":"SSM 3","desc":"سرامیک نخ بر","count":3,"heads":["11","18","40"]},{"date":"1405/04/15","machine":"SSM 3","desc":"Communication","count":2,"heads":["76","77"]},{"date":"1405/04/16","machine":"SSM 2","desc":"خرابی سیم نخ بر","count":6,"heads":["3","21","29","37","38","43"]},{"date":"1405/04/16","machine":"SSM 2","desc":"خرابی نخ بر","count":7,"heads":["11","33","39","41","42","95","96"]},{"date":"1405/04/16","machine":"SSM 2","desc":"نداشتن موتورتراورس","count":2,"heads":["5","50"]},{"date":"1405/04/16","machine":"SSM 2","desc":"ضربدری","count":1,"heads":["52"]},{"date":"1405/04/16","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/04/16","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/04/16","machine":"SSM 2","desc":"نخ بر ندارد","count":1,"heads":["7"]},{"date":"1405/04/16","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/16","machine":"SSM 2","desc":"سرامیک نخ بر","count":1,"heads":["80"]},{"date":"1405/04/16","machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","86"]},{"date":"1405/04/16","machine":"SSM 3","desc":"ضربدری","count":7,"heads":["2","10","79","80","78","54","66"]},{"date":"1405/04/16","machine":"SSM 3","desc":"خرابی اورفید","count":2,"heads":["3","30"]},{"date":"1405/04/16","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/16","machine":"SSM 3","desc":"Digitens","count":4,"heads":["25","45","58","72"]},{"date":"1405/04/16","machine":"SSM 3","desc":"خرابی موتور تراورس","count":1,"heads":["36"]},{"date":"1405/04/16","machine":"SSM 3","desc":"خرابی سیم نخ بر","count":1,"heads":["51"]},{"date":"1405/04/16","machine":"SSM 3","desc":"Error drive","count":1,"heads":["61"]},{"date":"1405/04/16","machine":"SSM 3","desc":"خرابی نخ بر","count":1,"heads":["70"]},{"date":"1405/04/16","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["16"]},{"date":"1405/04/17","machine":"SSM 2","desc":"خرابی سیم نخ بر","count":10,"heads":["3","21","29","37","38","26","48","89","67","84"]},{"date":"1405/04/17","machine":"SSM 2","desc":"خرابی نخ بر","count":7,"heads":["11","33","39","41","42","95","96"]},{"date":"1405/04/17","machine":"SSM 2","desc":"نداشتن موتورتراورس","count":2,"heads":["5","50"]},{"date":"1405/04/17","machine":"SSM 2","desc":"ضربدری","count":1,"heads":["52"]},{"date":"1405/04/17","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/04/17","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/04/17","machine":"SSM 2","desc":"نخ بر ندارد","count":1,"heads":["7"]},{"date":"1405/04/17","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/17","machine":"SSM 2","desc":"سرامیک نخ بر","count":1,"heads":["80"]},{"date":"1405/04/17","machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","86"]},{"date":"1405/04/17","machine":"SSM 2","desc":"شل میزند","count":1,"heads":["87"]},{"date":"1405/04/17","machine":"SSM 2","desc":"سایر","count":1,"heads":["83"]},{"date":"1405/04/17","machine":"SSM 3","desc":"ضربدری","count":7,"heads":["66","69","78","79","80","4","33"]},{"date":"1405/04/17","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["30"]},{"date":"1405/04/17","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/17","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["59"]},{"date":"1405/04/17","machine":"SSM 3","desc":"خرابی موتور تراورس","count":1,"heads":["36"]},{"date":"1405/04/17","machine":"SSM 3","desc":"خرابی سیم نخ بر","count":2,"heads":["25","9"]},{"date":"1405/04/17","machine":"SSM 3","desc":"Error drive","count":1,"heads":["61"]},{"date":"1405/04/17","machine":"SSM 3","desc":"Undervoltag","count":2,"heads":["82","83"]},{"date":"1405/04/18","machine":"SSM 2","desc":"پارگی سم نخ بر","count":3,"heads":["48","84","56"]},{"date":"1405/04/18","machine":"SSM 2","desc":"خرابی نخ بر","count":4,"heads":["33","39","43","60"]},{"date":"1405/04/18","machine":"SSM 2","desc":"نداشتن موتورتراورس","count":1,"heads":["50"]},{"date":"1405/04/18","machine":"SSM 2","desc":"ضربدری","count":13,"heads":["52","11","14","21","31","41","45","49","51","73","19","59","42"]},{"date":"1405/04/18","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/04/18","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/04/18","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/18","machine":"SSM 2","desc":"سرامیک نخ بر","count":1,"heads":["80"]},{"date":"1405/04/18","machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","86"]},{"date":"1405/04/18","machine":"SSM 2","desc":"شل میزند","count":1,"heads":["87"]},{"date":"1405/04/18","machine":"SSM 2","desc":"سایر","count":1,"heads":["83"]},{"date":"1405/04/18","machine":"SSM 3","desc":"ضربدری","count":12,"heads":["1","2","4","29","33","51","54","66","69","78","79","80"]},{"date":"1405/04/18","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["30"]},{"date":"1405/04/18","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/18","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["59"]},{"date":"1405/04/18","machine":"SSM 3","desc":"خرابی موتور تراورس","count":1,"heads":["36"]},{"date":"1405/04/20","machine":"SSM 3","desc":"Error drive","count":1,"heads":["61"]},{"date":"1405/04/20","machine":"SSM 2","desc":"پارگی سم نخ بر","count":2,"heads":["2","37"]},{"date":"1405/04/20","machine":"SSM 2","desc":"خرابی نخ بر","count":4,"heads":["33","43","39","72"]},{"date":"1405/04/20","machine":"SSM 2","desc":"سرامیک نخ بر","count":1,"heads":["31"]},{"date":"1405/04/20","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["50"]},{"date":"1405/04/20","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/04/20","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/04/20","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/20","machine":"SSM 2","desc":"شل میزند","count":1,"heads":["87"]},{"date":"1405/04/20","machine":"SSM 2","desc":"ضربدری","count":10,"heads":["14","19","49","51","52","32","47","48","72","41"]},{"date":null,"machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","86"]},{"date":"1405/04/20","machine":"SSM 3","desc":"ضربدری","count":12,"heads":["1","2","4","29","49","51","54","66","69","78","79","80"]},{"date":"1405/04/20","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/20","machine":"SSM 3","desc":"پارگی سم نخ بر","count":3,"heads":["18","35","60"]},{"date":"1405/04/20","machine":"SSM 3","desc":"خرابی موتور تراورس","count":1,"heads":["36"]},{"date":"1405/04/20","machine":"SSM 3","desc":"نخ بر ندارد","count":1,"heads":["52"]},{"date":"1405/04/20","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["59"]},{"date":"1405/04/20","machine":"SSM 3","desc":"Error drive","count":1,"heads":["61"]},{"date":"1405/04/20","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/20","machine":"SSM 3","desc":"خرابی اورفید","count":2,"heads":["53","58"]},{"date":"1405/04/21","machine":"SSM 2","desc":"پارگی سم نخ بر","count":3,"heads":["2","3","43"]},{"date":"1405/04/21","machine":"SSM 2","desc":"خرابی نخ بر","count":2,"heads":["33","42"]},{"date":"1405/04/21","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["50"]},{"date":"1405/04/21","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/04/21","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/04/21","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/21","machine":"SSM 2","desc":"شل میزند","count":1,"heads":["87"]},{"date":"1405/04/21","machine":"SSM 2","desc":"ضربدری","count":10,"heads":["14","19","31","41","45","47","48","49","52","73"]},{"date":"1405/04/21","machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","86"]},{"date":"1405/04/21","machine":"SSM 2","desc":"سایر","count":1,"heads":["37"]},{"date":"1405/04/21","machine":"SSM 3","desc":"ضربدری","count":17,"heads":["1","2","4","28","29","32","33","35","38","49","51","54","58","66","69","79","80"]},{"date":"1405/04/21","machine":"SSM 3","desc":"Overheating","count":1,"heads":["15"]},{"date":"1405/04/21","machine":"SSM 3","desc":"پارگی سم نخ بر","count":1,"heads":["48"]},{"date":"1405/04/21","machine":"SSM 3","desc":"خرابی موتور تراورس","count":1,"heads":["36"]},{"date":"1405/04/21","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["59"]},{"date":"1405/04/21","machine":"SSM 3","desc":"Error drive","count":2,"heads":["25","61"]},{"date":"1405/04/21","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/21","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["53"]},{"date":"1405/04/22","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":4,"heads":["3","4","29","79"]},{"date":"1405/04/22","machine":"SSM 2","desc":"خرابی نخ بر","count":2,"heads":["33","5"]},{"date":"1405/04/22","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["50"]},{"date":"1405/04/22","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/04/22","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/04/22","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/22","machine":"SSM 2","desc":"سرامیک نخ بر","count":3,"heads":["21","31","42"]},{"date":"1405/04/22","machine":"SSM 2","desc":"ضربدری","count":16,"heads":["13","39","41","45","43","47","48","52","53","55","59","60","69","88","92","93"]},{"date":"1405/04/22","machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","86"]},{"date":"1405/04/22","machine":"SSM 2","desc":"سایر","count":2,"heads":["37","18"]},{"date":null,"machine":"SSM 2","desc":"خرابی دسته پوزیشن","count":1,"heads":["92"]},{"date":"1405/04/22","machine":"SSM 3","desc":"ضربدری","count":17,"heads":["1","2","4","28","29","32","33","35","38","49","51","54","58","66","69","79","80"]},{"date":"1405/04/22","machine":"SSM 3","desc":"Overheating","count":1,"heads":["15"]},{"date":"1405/04/22","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":1,"heads":["48"]},{"date":"1405/04/22","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["36"]},{"date":"1405/04/22","machine":"SSM 3","desc":"Error drive","count":1,"heads":["61"]},{"date":"1405/04/22","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/22","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["53"]},{"date":"1405/04/22","machine":"SSM 3","desc":"سنسور","count":1,"heads":["30"]},{"date":"1405/04/23","machine":"SSM 3","desc":"ارور دسته پوزیشن","count":2,"heads":["31","35"]},{"date":"1405/04/23","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["75"]},{"date":"1405/04/23","machine":"SSM 3","desc":"خرابی دسته پوزیشن","count":1,"heads":["2"]},{"date":"1405/04/23","machine":"SSM 2","desc":"خرابی نخ بر","count":6,"heads":["4","5","33","39","43","44"]},{"date":"1405/04/23","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["50"]},{"date":"1405/04/23","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/04/23","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/04/23","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/23","machine":"SSM 2","desc":"سرامیک نخ بر","count":2,"heads":["31","42"]},{"date":"1405/04/23","machine":"SSM 2","desc":"سایر","count":1,"heads":["37"]},{"date":"1405/04/23","machine":"SSM 2","desc":"خرابی دسته پوزیشن","count":1,"heads":["92"]},{"date":"1405/04/23","machine":"SSM 3","desc":"خرابی نخ بر","count":1,"heads":["37"]},{"date":"1405/04/23","machine":"SSM 3","desc":"Overheating","count":1,"heads":["15"]},{"date":"1405/04/23","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":1,"heads":["48"]},{"date":"1405/04/23","machine":"SSM 3","desc":"اورفید ندارد","count":1,"heads":["36"]},{"date":"1405/04/23","machine":"SSM 3","desc":"Error drive","count":1,"heads":["25"]},{"date":"1405/04/23","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/23","machine":"SSM 3","desc":"خرابی اورفید","count":2,"heads":["31","53"]},{"date":"1405/04/23","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["75"]},{"date":"1405/04/23","machine":"SSM 3","desc":"خرابی دسته پوزیشن","count":1,"heads":["2"]},{"date":"1405/04/24","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":1,"heads":["23"]},{"date":"1405/04/24","machine":"SSM 2","desc":"خرابی نخ بر","count":2,"heads":["5","39"]},{"date":"1405/04/24","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["50"]},{"date":"1405/04/24","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":2,"heads":["41","58"]},{"date":"1405/04/24","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/04/24","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/24","machine":"SSM 2","desc":"سرامیک نخ بر","count":1,"heads":["31"]},{"date":"1405/04/24","machine":"SSM 2","desc":"سایر","count":1,"heads":["37"]},{"date":"1405/04/24","machine":"SSM 2","desc":"شل میزند","count":2,"heads":["42","69"]},{"date":"1405/04/24","machine":"SSM 3","desc":"ارور دسته پوزیشن","count":3,"heads":["33","35","60"]},{"date":"1405/04/24","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":3,"heads":["37","32","66"]},{"date":"1405/04/24","machine":"SSM 3","desc":"اورفید ندارد","count":1,"heads":["36"]},{"date":"1405/04/24","machine":"SSM 3","desc":"Error drive","count":1,"heads":["61"]},{"date":"1405/04/24","machine":"SSM 3","desc":"Communication","count":6,"heads":["70","71","72","76","77","78"]},{"date":"1405/04/24","machine":"SSM 3","desc":"اورفید صدا میدهد","count":3,"heads":["31","38","53"]},{"date":"1405/04/24","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["41"]},{"date":"1405/04/24","machine":"SSM 3","desc":"Digitens","count":1,"heads":["79"]},{"date":"1405/04/24","machine":"SSM 3","desc":"خرابی نخ بر","count":1,"heads":["9"]},{"date":"1405/04/24","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/25","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":4,"heads":["43","85","96","23"]},{"date":"1405/04/25","machine":"SSM 2","desc":"خرابی نخ بر","count":1,"heads":["39"]},{"date":"1405/04/25","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["50"]},{"date":"1405/04/25","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":2,"heads":["41","58"]},{"date":"1405/04/25","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/04/25","machine":"SSM 2","desc":"شل میزند","count":2,"heads":["42","69"]},{"date":"1405/04/25","machine":"SSM 3","desc":"ارور دسته پوزیشن","count":2,"heads":["33","60"]},{"date":"1405/04/25","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":6,"heads":["9","37","73","51","28","66"]},{"date":"1405/04/25","machine":"SSM 3","desc":"اورفید ندارد","count":1,"heads":["36"]},{"date":"1405/04/25","machine":"SSM 3","desc":"Error drive","count":2,"heads":["25","61"]},{"date":"1405/04/25","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/25","machine":"SSM 3","desc":"اورفید صدا میدهد","count":3,"heads":["31","38","53"]},{"date":"1405/04/25","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["58"]},{"date":"1405/04/25","machine":"SSM 3","desc":"Digitens","count":2,"heads":["45","79"]},{"date":"1405/04/25","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/25","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["45"]},{"date":"1405/04/27","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":3,"heads":["32","93","94"]},{"date":"1405/04/27","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/04/27","machine":"SSM 2","desc":"خرابی نخ بر","count":7,"heads":["29","44","75","84","89","93","94"]},{"date":"1405/04/27","machine":"SSM 2","desc":"Digitens","count":1,"heads":["6"]},{"date":"1405/04/27","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["50"]},{"date":"1405/04/27","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/04/27","machine":"SSM 2","desc":"سرامیک نخ بر","count":2,"heads":["36","51"]},{"date":"1405/04/27","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":2,"heads":["2","10"]},{"date":"1405/04/27","machine":"SSM 3","desc":"Error drive","count":2,"heads":["25","61"]},{"date":"1405/04/27","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/27","machine":"SSM 3","desc":"اورفید ندارد","count":1,"heads":["36"]},{"date":"1405/04/27","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["45"]},{"date":"1405/04/27","machine":"SSM 3","desc":"Digitens","count":1,"heads":["79"]},{"date":"1405/04/27","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/27","machine":"SSM 3","desc":"سفت میزند","count":1,"heads":["75"]},{"date":"1405/04/28","machine":"SSM 2","desc":"Digitens","count":1,"heads":["6"]},{"date":"1405/04/28","machine":"SSM 2","desc":"خرابی نخ بر","count":6,"heads":["5","39","42","43","44","73"]},{"date":"1405/04/28","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":5,"heads":["28","32","89","93","94"]},{"date":"1405/04/28","machine":"SSM 2","desc":"اورفید صدا میدهد","count":1,"heads":["1"]},{"date":"1405/04/28","machine":"SSM 2","desc":"نخ بر ندارد","count":2,"heads":["36","51"]},{"date":"1405/04/28","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["50"]},{"date":"1405/04/28","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/04/28","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":2,"heads":["2","7"]},{"date":"1405/04/28","machine":"SSM 3","desc":"ارور دسته پوزیشن","count":1,"heads":["9"]},{"date":"1405/04/28","machine":"SSM 3","desc":"Error drive","count":3,"heads":["25","36","61"]},{"date":"1405/04/28","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["45"]},{"date":"1405/04/28","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/28","machine":"SSM 3","desc":"Digitens","count":1,"heads":["79"]},{"date":"1405/04/28","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/28","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["53"]},{"date":"1405/04/28","machine":"SSM 3","desc":"سفت میزند","count":1,"heads":["75"]},{"date":"1405/04/28","machine":"SSM 3","desc":"خرابی نخ بر","count":1,"heads":["40"]},{"date":"1405/04/29","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":5,"heads":["5","32","73","94","89"]},{"date":"1405/04/29","machine":"SSM 2","desc":"Digitens","count":1,"heads":["6"]},{"date":"1405/04/29","machine":"SSM 2","desc":"خرابی نخ بر","count":3,"heads":["42","43","75"]},{"date":"1405/04/29","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["50"]},{"date":"1405/04/29","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/04/29","machine":"SSM 2","desc":"نخ بر ندارد","count":1,"heads":["51"]},{"date":"1405/04/29","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/04/29","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":4,"heads":["2","5","7","10"]},{"date":"1405/04/29","machine":"SSM 3","desc":"Error drive","count":3,"heads":["25","36","61"]},{"date":"1405/04/29","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/29","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/29","machine":"SSM 3","desc":"اورفید صدا میدهد","count":3,"heads":["35","53","70"]},{"date":"1405/04/29","machine":"SSM 3","desc":"خرابی نخ بر","count":2,"heads":["40","58"]},{"date":"1405/04/29","machine":"SSM 3","desc":"Digitens","count":1,"heads":["79"]},{"date":"1405/04/29","machine":"SSM 3","desc":"خرابی اورفید","count":2,"heads":["45","70"]},{"date":"1405/04/30","machine":"SSM 2","desc":"خرابی نخ بر","count":5,"heads":["39","46","75","94","32"]},{"date":"1405/04/30","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/04/30","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":2,"heads":["48","89"]},{"date":"1405/04/30","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/04/30","machine":"SSM 2","desc":"Digitens","count":1,"heads":["6"]},{"date":"1405/04/30","machine":"SSM 3","desc":"Error drive","count":4,"heads":["8","25","49","61"]},{"date":"1405/04/30","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/30","machine":"SSM 3","desc":"خرابی نخ بر","count":2,"heads":["10","58"]},{"date":"1405/04/30","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":3,"heads":["11","54","66"]},{"date":"1405/04/30","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["45"]},{"date":"1405/04/30","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["53"]},{"date":"1405/04/30","machine":"SSM 3","desc":"سفت میزند","count":1,"heads":["72"]},{"date":"1405/04/30","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/30","machine":"SSM 3","desc":"Digitens","count":1,"heads":["79"]},{"date":"1405/04/31","machine":"SSM 2","desc":"Digitens","count":1,"heads":["6"]},{"date":"1405/04/31","machine":"SSM 2","desc":"خرابی نخ بر","count":5,"heads":["32","39","43","46","75"]},{"date":"1405/04/31","machine":"SSM 2","desc":"سایر","count":2,"heads":["3","42"]},{"date":"1405/04/31","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":1,"heads":["48"]},{"date":"1405/04/31","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/04/31","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/04/31","machine":"SSM 2","desc":"سرامیک نخ بر","count":1,"heads":["41"]},{"date":"1405/04/31","machine":"SSM 3","desc":"Error drive","count":6,"heads":["8","25","36","49","58","61"]},{"date":"1405/04/31","machine":"SSM 3","desc":"خرابی نخ بر","count":2,"heads":["10","13"]},{"date":"1405/04/31","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/04/31","machine":"SSM 3","desc":"Digitens","count":1,"heads":["79"]},{"date":"1405/04/31","machine":"SSM 3","desc":"Overheating","count":3,"heads":["16","17","18"]},{"date":"1405/04/31","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":3,"heads":["11","54","73"]},{"date":"1405/04/31","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["53"]},{"date":"1405/04/31","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["45"]},{"date":"1405/04/31","machine":"SSM 3","desc":"سفت میزند","count":1,"heads":["72"]},{"date":"1405/04/31","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/04/31","machine":"SSM 1","desc":"خرابی نخ بر","count":4,"heads":["2","66","80","81"]},{"date":"1405/04/31","machine":"SSM 1","desc":"Digitens","count":7,"heads":["5","6","24","50","85","88","23"]},{"date":"1405/04/31","machine":"SSM 1","desc":"ارور دسته پوزیشن","count":1,"heads":["14"]},{"date":"1405/04/31","machine":"SSM 1","desc":"Communication","count":3,"heads":["19","20","21"]},{"date":"1405/04/31","machine":"SSM 1","desc":"Error drive","count":3,"heads":["30","38","67"]},{"date":"1405/04/31","machine":"SSM 1","desc":"اورفید صدا میدهد","count":6,"heads":["15","22","47","58","79","90"]},{"date":"1405/04/31","machine":"SSM 1","desc":"نداشتن موتورتراورس","count":2,"heads":["60","93"]},{"date":"1405/04/31","machine":"SSM 1","desc":"سرامیک نخ بر","count":1,"heads":["38"]},{"date":"1405/04/31","machine":"SSM 1","desc":"سایر","count":2,"heads":["42","43"]},{"date":"1405/05/03","machine":"SSM 2","desc":"سایر","count":2,"heads":["3","42"]},{"date":"1405/05/03","machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","22"]},{"date":"1405/05/03","machine":"SSM 2","desc":"خرابی نخ بر","count":5,"heads":["39","68","75","43","94"]},{"date":"1405/05/03","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/03","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/03","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["89"]},{"date":"1405/05/03","machine":"SSM 2","desc":"Overheating","count":4,"heads":["96","61","62","63"]},{"date":"1405/05/03","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":1,"heads":["84"]},{"date":"1405/05/03","machine":"SSM 3","desc":"خرابی نخ بر","count":4,"heads":["20","10","40","42"]},{"date":"1405/05/03","machine":"SSM 3","desc":"Error drive","count":4,"heads":["25","36","49","61"]},{"date":"1405/05/03","machine":"SSM 3","desc":"Digitens","count":2,"heads":["39","79"]},{"date":"1405/05/03","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/05/03","machine":"SSM 3","desc":"شل میزند","count":2,"heads":["6","45"]},{"date":"1405/05/03","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/03","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["35"]},{"date":"1405/05/03","machine":"SSM 3","desc":"Overheating","count":1,"heads":["53"]},{"date":"1405/05/03","machine":"SSM 3","desc":"سفت میزند","count":2,"heads":["71","72"]},{"date":"1405/05/03","machine":"SSM 1","desc":"خرابی نخ بر","count":6,"heads":["13","80","81","15","66","67"]},{"date":"1405/05/03","machine":"SSM 1","desc":"Digitens","count":5,"heads":["16","18","50","85","88"]},{"date":"1405/05/03","machine":"SSM 1","desc":"نداشتن موتورتراورس","count":2,"heads":["60","93"]},{"date":"1405/05/03","machine":"SSM 1","desc":"سنسور","count":1,"heads":["14"]},{"date":"1405/05/03","machine":"SSM 1","desc":"اورفید ندارد","count":1,"heads":["30"]},{"date":"1405/05/03","machine":"SSM 1","desc":"سایر","count":3,"heads":["43","12","86"]},{"date":"1405/05/03","machine":"SSM 1","desc":"اورفید صدا میدهد","count":3,"heads":["45","79","90"]},{"date":"1405/05/03","machine":"SSM 1","desc":"سرامیک نخ بر","count":1,"heads":["87"]},{"date":"1405/05/03","machine":"SSM 1","desc":"شل میزند","count":1,"heads":["40"]},{"date":"1405/05/04","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["3"]},{"date":"1405/05/04","machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","22"]},{"date":"1405/05/04","machine":"SSM 2","desc":"خرابی نخ بر","count":4,"heads":["39","68","43","75"]},{"date":"1405/05/04","machine":"SSM 2","desc":"سایر","count":1,"heads":["42"]},{"date":"1405/05/04","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/04","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/04","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/04","machine":"SSM 2","desc":"Overheating","count":4,"heads":["61","62","63","96"]},{"date":"1405/05/04","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":3,"heads":["84","94","15"]},{"date":"1405/05/04","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["89"]},{"date":"1405/05/04","machine":"SSM 2","desc":"اورفید ندارد","count":1,"heads":["60"]},{"date":"1405/05/04","machine":"SSM 3","desc":"خرابی نخ بر","count":4,"heads":["20","40","10","42"]},{"date":"1405/05/04","machine":"SSM 3","desc":"Error drive","count":4,"heads":["25","36","49","61"]},{"date":"1405/05/04","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/05/04","machine":"SSM 3","desc":"شل میزند","count":2,"heads":["6","45"]},{"date":"1405/05/04","machine":"SSM 3","desc":"سفت میزند","count":2,"heads":["71","72"]},{"date":"1405/05/04","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/04","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["22"]},{"date":"1405/05/04","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["35"]},{"date":"1405/05/04","machine":"SSM 3","desc":"Digitens","count":2,"heads":["39","79"]},{"date":"1405/05/04","machine":"SSM 3","desc":"Overheating","count":1,"heads":["53"]},{"date":"1405/05/04","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":1,"heads":["48"]},{"date":"1405/05/04","machine":"SSM 3","desc":"سایر","count":1,"heads":["73"]},{"date":"1405/05/04","machine":"SSM 1","desc":"خرابی نخ بر","count":6,"heads":["17","18","23","66","15","67"]},{"date":"1405/05/04","machine":"SSM 1","desc":"Digitens","count":4,"heads":["42","50","85","88"]},{"date":"1405/05/04","machine":"SSM 1","desc":"نداشتن موتورتراورس","count":2,"heads":["60","93"]},{"date":"1405/05/04","machine":"SSM 1","desc":"Communication","count":3,"heads":["79","80","81"]},{"date":"1405/05/04","machine":"SSM 1","desc":"با قطر کم داف میکند","count":4,"heads":["12","43","64","86"]},{"date":"1405/05/04","machine":"SSM 1","desc":"سنسور","count":3,"heads":["14","20","31"]},{"date":"1405/05/04","machine":"SSM 1","desc":"اورفید ندارد","count":1,"heads":["30"]},{"date":"1405/05/04","machine":"SSM 1","desc":"اورفید صدا میدهد","count":5,"heads":["42","45","49","90","40"]},{"date":"1405/05/04","machine":"SSM 1","desc":"سرامیک نخ بر","count":1,"heads":["87"]},{"date":"1405/05/04","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":2,"heads":["13","91"]},{"date":"1405/05/04","machine":"SSM 1","desc":"ارور دسته پوزیشن","count":1,"heads":["64"]},{"date":"1405/05/05","machine":"SSM 2","desc":"Digitens","count":3,"heads":["6","22","51"]},{"date":"1405/05/05","machine":"SSM 2","desc":"خرابی نخ بر","count":2,"heads":["4","43"]},{"date":"1405/05/05","machine":"SSM 2","desc":"سایر","count":1,"heads":["42"]},{"date":"1405/05/05","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/05","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/05","machine":"SSM 2","desc":"Overheating","count":2,"heads":["62","94"]},{"date":"1405/05/05","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":1,"heads":["84"]},{"date":"1405/05/05","machine":"SSM 2","desc":"اورفید ندارد","count":1,"heads":["60"]},{"date":"1405/05/05","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["3"]},{"date":"1405/05/05","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/05","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/05","machine":"SSM 3","desc":"خرابی نخ بر","count":1,"heads":["20"]},{"date":"1405/05/05","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["22"]},{"date":"1405/05/05","machine":"SSM 3","desc":"Error drive","count":4,"heads":["25","36","49","61"]},{"date":"1405/05/05","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/05/05","machine":"SSM 3","desc":"شل میزند","count":2,"heads":["6","45"]},{"date":"1405/05/05","machine":"SSM 3","desc":"سفت میزند","count":2,"heads":["10","72"]},{"date":"1405/05/05","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["35"]},{"date":"1405/05/05","machine":"SSM 3","desc":"Digitens","count":2,"heads":["39","79"]},{"date":"1405/05/05","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":2,"heads":["48","70"]},{"date":"1405/05/05","machine":"SSM 3","desc":"Overheating","count":3,"heads":["13","14","53"]},{"date":"1405/05/06","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["3"]},{"date":"1405/05/06","machine":"SSM 2","desc":"خرابی نخ بر","count":2,"heads":["4","43"]},{"date":"1405/05/06","machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","22"]},{"date":"1405/05/06","machine":"SSM 2","desc":"سایر","count":1,"heads":["42"]},{"date":"1405/05/06","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/06","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/06","machine":"SSM 2","desc":"Overheating","count":5,"heads":["61","62","63","94","95"]},{"date":"1405/05/06","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/06","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/06","machine":"SSM 3","desc":"Error drive","count":4,"heads":["25","36","49","61"]},{"date":"1405/05/06","machine":"SSM 3","desc":"خرابی نخ بر","count":2,"heads":["40","69"]},{"date":"1405/05/06","machine":"SSM 3","desc":"Overheating","count":1,"heads":["53"]},{"date":"1405/05/06","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/05/06","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["6"]},{"date":"1405/05/06","machine":"SSM 3","desc":"سفت میزند","count":2,"heads":["10","33"]},{"date":"1405/05/06","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["35"]},{"date":"1405/05/06","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":1,"heads":["48"]},{"date":"1405/05/06","machine":"SSM 3","desc":"Digitens","count":1,"heads":["79"]},{"date":"1405/05/06","machine":"SSM 1","desc":"Communication","count":3,"heads":["79","80","81"]},{"date":"1405/05/06","machine":"SSM 1","desc":"Digitens","count":4,"heads":["88","92","50","85"]},{"date":"1405/05/06","machine":"SSM 1","desc":"خرابی نخ بر","count":10,"heads":["7","15","17","18","61","63","35","66","67","93"]},{"date":"1405/05/06","machine":"SSM 1","desc":"سنسور","count":2,"heads":["12","31"]},{"date":"1405/05/06","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":5,"heads":["16","28","44","89","6"]},{"date":"1405/05/06","machine":"SSM 1","desc":"اورفید صدا میدهد","count":4,"heads":["42","45","49","90"]},{"date":"1405/05/06","machine":"SSM 1","desc":"با قطر کم داف میکند","count":3,"heads":["43","44","86"]},{"date":"1405/05/06","machine":"SSM 1","desc":"شل میزند","count":2,"heads":["55","40"]},{"date":"1405/05/06","machine":"SSM 1","desc":"Overheating","count":3,"heads":["76","77","78"]},{"date":"1405/05/06","machine":"SSM 1","desc":"Error drive","count":1,"heads":["67"]},{"date":"1405/05/07","machine":"SSM 1","desc":"خرابی نخ بر","count":12,"heads":["2","16","23","61","68","7","15","17","18","28","44","93"]},{"date":"1405/05/07","machine":"SSM 1","desc":"سنسور","count":2,"heads":["12","31"]},{"date":"1405/05/07","machine":"SSM 1","desc":"Error drive","count":1,"heads":["67"]},{"date":"1405/05/07","machine":"SSM 1","desc":"Overheating","count":3,"heads":["76","77","78"]},{"date":"1405/05/07","machine":"SSM 1","desc":"Communication","count":3,"heads":["79","80","81"]},{"date":"1405/05/07","machine":"SSM 1","desc":"Digitens","count":4,"heads":["50","85","88","92"]},{"date":"1405/05/07","machine":"SSM 1","desc":"اورفید صدا میدهد","count":4,"heads":["1","42","49","90"]},{"date":"1405/05/07","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":1,"heads":["6"]},{"date":"1405/05/07","machine":"SSM 1","desc":"شل میزند","count":2,"heads":["40","55"]},{"date":"1405/05/07","machine":"SSM 1","desc":"با قطر کم داف میکند","count":3,"heads":["43","64","86"]},{"date":"1405/05/07","machine":"SSM 1","desc":"نداشتن موتورتراورس","count":1,"heads":["93"]},{"date":"1405/05/07","machine":"SSM 2","desc":"خرابی نخ بر","count":3,"heads":["4","43","94"]},{"date":"1405/05/07","machine":"SSM 2","desc":"سایر","count":2,"heads":["6","42"]},{"date":"1405/05/07","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/07","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/07","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/07","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/07","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["6"]},{"date":"1405/05/07","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/07","machine":"SSM 3","desc":"خرابی نخ بر","count":1,"heads":["20"]},{"date":"1405/05/07","machine":"SSM 3","desc":"Error drive","count":4,"heads":["25","36","49","61"]},{"date":"1405/05/07","machine":"SSM 3","desc":"Communication","count":3,"heads":["76","77","78"]},{"date":"1405/05/07","machine":"SSM 3","desc":"سفت میزند","count":2,"heads":["10","73"]},{"date":"1405/05/07","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["26"]},{"date":"1405/05/07","machine":"SSM 3","desc":"ارور دسته پوزیشن","count":1,"heads":["30"]},{"date":"1405/05/07","machine":"SSM 3","desc":"Digitens","count":1,"heads":["79"]},{"date":"1405/05/07","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["81"]},{"date":"1405/05/07","machine":"SSM 3","desc":"Overheating","count":1,"heads":["53"]},{"date":"1405/05/10","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":5,"heads":["3","5","16","41","20"]},{"date":"1405/05/10","machine":"SSM 3","desc":"خرابی نخ بر","count":1,"heads":["63"]},{"date":"1405/05/10","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/10","machine":"SSM 3","desc":"Error drive","count":4,"heads":["25","36","49","61"]},{"date":"1405/05/10","machine":"SSM 3","desc":"Digitens","count":1,"heads":["37"]},{"date":"1405/05/10","machine":"SSM 3","desc":"Communication","count":6,"heads":["76","77","78","82","83","84"]},{"date":"1405/05/10","machine":"SSM 3","desc":"سفت میزند","count":1,"heads":["73"]},{"date":"1405/05/10","machine":"SSM 3","desc":"سایر","count":1,"heads":["22"]},{"date":"1405/05/10","machine":"SSM 3","desc":"ارور دسته پوزیشن","count":1,"heads":["9"]},{"date":"1405/05/11","machine":"SSM 1","desc":"Error drive","count":1,"heads":["15"]},{"date":"1405/05/11","machine":"SSM 1","desc":"خرابی نخ بر","count":8,"heads":["17","61","66","68","89","7","65","45"]},{"date":"1405/05/11","machine":"SSM 1","desc":"Digitens","count":4,"heads":["18","50","85","88"]},{"date":"1405/05/11","machine":"SSM 1","desc":"سنسور","count":2,"heads":["16","31"]},{"date":"1405/05/11","machine":"SSM 1","desc":"Overheating","count":3,"heads":["34","35","36"]},{"date":"1405/05/11","machine":"SSM 1","desc":"شل میزند","count":1,"heads":["40"]},{"date":"1405/05/11","machine":"SSM 1","desc":"با قطر کم داف میکند","count":3,"heads":["12","43","64"]},{"date":"1405/05/11","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":3,"heads":["60","79","86"]},{"date":"1405/05/11","machine":"SSM 1","desc":"اورفید صدا میدهد","count":2,"heads":["49","90"]},{"date":"1405/05/11","machine":"SSM 2","desc":"Digitens","count":1,"heads":["6"]},{"date":"1405/05/11","machine":"SSM 2","desc":"خرابی نخ بر","count":1,"heads":["43"]},{"date":"1405/05/11","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/11","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/11","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/11","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/11","machine":"SSM 2","desc":"اورفید صدا میدهد","count":1,"heads":["21"]},{"date":"1405/05/11","machine":"SSM 3","desc":"خرابی نخ بر","count":3,"heads":["3","33","55"]},{"date":"1405/05/11","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["6"]},{"date":"1405/05/11","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/11","machine":"SSM 3","desc":"ارور دسته پوزیشن","count":1,"heads":["9"]},{"date":"1405/05/11","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["19"]},{"date":"1405/05/06","machine":"SSM 3","desc":"Digitens","count":2,"heads":["26","37"]},{"date":"1405/05/06","machine":"SSM 3","desc":"Error drive","count":4,"heads":["25","36","49","61"]},{"date":"1405/05/06","machine":"SSM 3","desc":"Communication","count":6,"heads":["76","77","78","82","83","84"]},{"date":"1405/05/06","machine":"SSM 3","desc":"نخ بر ندارد","count":1,"heads":["13"]},{"date":"1405/05/06","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":1,"heads":["16"]},{"date":"1405/05/12","machine":"SSM 1","desc":"Digitens","count":5,"heads":["6","50","18","85","88"]},{"date":"1405/05/12","machine":"SSM 1","desc":"خرابی نخ بر","count":6,"heads":["7","61","65","66","68","89"]},{"date":"1405/05/12","machine":"SSM 1","desc":"با قطر کم داف میکند","count":3,"heads":["12","43","64"]},{"date":"1405/05/12","machine":"SSM 1","desc":"Communication","count":3,"heads":["16","17","18"]},{"date":"1405/05/12","machine":"SSM 1","desc":"Error drive","count":1,"heads":["15"]},{"date":"1405/05/12","machine":"SSM 1","desc":"سنسور","count":2,"heads":["16","31"]},{"date":"1405/05/12","machine":"SSM 1","desc":"شل میزند","count":1,"heads":["40"]},{"date":"1405/05/12","machine":"SSM 1","desc":"اورفید صدا میدهد","count":5,"heads":["17","45","60","79","86"]},{"date":"1405/05/12","machine":"SSM 1","desc":"نداشتن موتورتراورس","count":2,"heads":["67","93"]},{"date":"1405/05/12","machine":"SSM 1","desc":"خرابی اورفید","count":1,"heads":["42"]},{"date":"1405/05/12","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":4,"heads":["60","69","79","80"]},{"date":"1405/05/12","machine":"SSM 2","desc":"Digitens","count":2,"heads":["6","22"]},{"date":"1405/05/12","machine":"SSM 2","desc":"خرابی نخ بر","count":4,"heads":["43","76","47","94"]},{"date":"1405/05/12","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/12","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/12","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/12","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/12","machine":"SSM 2","desc":"اورفید صدا میدهد","count":1,"heads":["21"]},{"date":"1405/05/12","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["44"]},{"date":"1405/05/12","machine":"SSM 2","desc":"سفت میزند","count":1,"heads":["79"]},{"date":"1405/05/12","machine":"SSM 2","desc":"شل میزند","count":1,"heads":["80"]},{"date":"1405/05/12","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":1,"heads":["90"]},{"date":"1405/05/12","machine":"SSM 2","desc":"سرامیک نخ بر","count":1,"heads":["23"]},{"date":"1405/05/12","machine":"SSM 3","desc":"خرابی نخ بر","count":4,"heads":["3","55","33","63"]},{"date":"1405/05/12","machine":"SSM 3","desc":"شل میزند","count":2,"heads":["6","48"]},{"date":"1405/05/12","machine":"SSM 3","desc":"نخ بر ندارد","count":1,"heads":["13"]},{"date":"1405/05/12","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/12","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":4,"heads":["16","21","44","62"]},{"date":"1405/05/12","machine":"SSM 3","desc":"Error drive","count":1,"heads":["36"]},{"date":"1405/05/12","machine":"SSM 3","desc":"Digitens","count":2,"heads":["26","37"]},{"date":"1405/05/12","machine":"SSM 3","desc":"Communication","count":6,"heads":["76","77","78","82","83","84"]},{"date":"1405/05/12","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["19"]},{"date":"1405/05/12","machine":"SSM 3","desc":"سایر","count":1,"heads":["22"]},{"date":"1405/05/14","machine":"SSM 1","desc":"Digitens","count":4,"heads":["6","50","85","88"]},{"date":"1405/05/14","machine":"SSM 1","desc":"Communication","count":9,"heads":["16","17","18","13","14","15","25","26","27"]},{"date":"1405/05/14","machine":"SSM 1","desc":"خرابی نخ بر","count":3,"heads":["67","68","93"]},{"date":"1405/05/14","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":4,"heads":["79","89","80","95"]},{"date":"1405/05/14","machine":"SSM 1","desc":"با قطر کم داف میکند","count":2,"heads":["12","43"]},{"date":"1405/05/14","machine":"SSM 1","desc":"سنسور","count":2,"heads":["31","16"]},{"date":"1405/05/14","machine":"SSM 1","desc":"شل میزند","count":2,"heads":["40","72"]},{"date":"1405/05/14","machine":"SSM 1","desc":"اورفید صدا میدهد","count":1,"heads":["90"]},{"date":"1405/05/14","machine":"SSM 2","desc":"مشکل برد","count":2,"heads":["43","58"]},{"date":"1405/05/14","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/14","machine":"SSM 2","desc":"Digitens","count":1,"heads":["21"]},{"date":"1405/05/14","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["44"]},{"date":"1405/05/14","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/14","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/14","machine":"SSM 2","desc":"شل میزند","count":1,"heads":["80"]},{"date":"1405/05/14","machine":"SSM 2","desc":"خرابی نخ بر","count":1,"heads":["47"]},{"date":"1405/05/14","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":1,"heads":["48"]},{"date":"1405/05/14","machine":"SSM 3","desc":"خرابی نخ بر","count":2,"heads":["3","55"]},{"date":"1405/05/14","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/14","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["6"]},{"date":"1405/05/14","machine":"SSM 3","desc":"Error drive","count":2,"heads":["36","49"]},{"date":"1405/05/14","machine":"SSM 3","desc":"Digitens","count":2,"heads":["26","37"]},{"date":"1405/05/14","machine":"SSM 3","desc":"Communication","count":6,"heads":["76","77","78","82","83","84"]},{"date":"1405/05/17","machine":"SSM 1","desc":"Digitens","count":5,"heads":["6","49","50","85","88"]},{"date":"1405/05/17","machine":"SSM 1","desc":"Communication","count":9,"heads":["13","14","15","16","17","18","25","26","27"]},{"date":"1405/05/17","machine":"SSM 1","desc":"خرابی نخ بر","count":9,"heads":["21","39","60","61","66","68","89","92","93"]},{"date":"1405/05/17","machine":"SSM 1","desc":"با قطر کم داف میکند","count":2,"heads":["12","43"]},{"date":"1405/05/17","machine":"SSM 1","desc":"سنسور","count":2,"heads":["16","31"]},{"date":"1405/05/17","machine":"SSM 1","desc":"شل میزند","count":2,"heads":["40","72"]},{"date":"1405/05/17","machine":"SSM 1","desc":"خرابی نخ بر","count":2,"heads":["67","79"]},{"date":"1405/05/17","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":2,"heads":["80","95"]},{"date":"1405/05/17","machine":"SSM 1","desc":"اورفید صدا میدهد","count":1,"heads":["90"]},{"date":"1405/05/17","machine":"SSM 1","desc":"خرابی دسته پوزیشن","count":1,"heads":["5"]},{"date":"1405/05/17","machine":"SSM 2","desc":"Communication","count":3,"heads":["1","2","3"]},{"date":"1405/05/17","machine":"SSM 2","desc":"مشکل برد","count":2,"heads":["43","58"]},{"date":"1405/05/17","machine":"SSM 2","desc":"خرابی نخ بر","count":4,"heads":["44","48","95","47"]},{"date":"1405/05/17","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/17","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/17","machine":"SSM 2","desc":"Digitens","count":4,"heads":["21","22","26","75"]},{"date":"1405/05/17","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["44"]},{"date":"1405/05/17","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/17","machine":"SSM 2","desc":"سایر","count":1,"heads":["42"]},{"date":"1405/05/17","machine":"SSM 3","desc":"خرابی نخ بر","count":5,"heads":["5","60","3","63","71"]},{"date":"1405/05/17","machine":"SSM 3","desc":"شل میزند","count":2,"heads":["6","48"]},{"date":"1405/05/17","machine":"SSM 3","desc":"Overheating","count":2,"heads":["13","14"]},{"date":"1405/05/17","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/17","machine":"SSM 3","desc":"Digitens","count":2,"heads":["26","49"]},{"date":"1405/05/17","machine":"SSM 3","desc":"Error drive","count":1,"heads":["36"]},{"date":"1405/05/17","machine":"SSM 3","desc":"Communication","count":6,"heads":["76","77","78","82","83","84"]},{"date":"1405/05/18","machine":"SSM 1","desc":"خرابی دسته پوزیشن","count":1,"heads":["5"]},{"date":"1405/05/18","machine":"SSM 1","desc":"Digitens","count":6,"heads":["6","49","50","85","88","76"]},{"date":"1405/05/18","machine":"SSM 1","desc":"Communication","count":9,"heads":["13","14","15","16","17","18","25","26","27"]},{"date":"1405/05/18","machine":"SSM 1","desc":"خرابی نخ بر","count":16,"heads":["21","39","60","66","61","68","79","80","93","74","81","86","87","89","95","67"]},{"date":"1405/05/18","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":2,"heads":["3","69"]},{"date":"1405/05/18","machine":"SSM 1","desc":"با قطر کم داف میکند","count":2,"heads":["12","43"]},{"date":"1405/05/18","machine":"SSM 1","desc":"شل میزند","count":3,"heads":["40","44","72"]},{"date":"1405/05/18","machine":"SSM 1","desc":"اورفید صدا میدهد","count":1,"heads":["90"]},{"date":"1405/05/18","machine":"SSM 1","desc":"سنسور","count":1,"heads":["31"]},{"date":"1405/05/18","machine":"SSM 2","desc":"Digitens","count":4,"heads":["2","21","22","26"]},{"date":"1405/05/18","machine":"SSM 2","desc":"خرابی نخ بر","count":3,"heads":["37","94","95"]},{"date":"1405/05/18","machine":"SSM 2","desc":"مشکل برد","count":2,"heads":["58","43"]},{"date":"1405/05/18","machine":"SSM 2","desc":"Error drive","count":2,"heads":["50","33"]},{"date":"1405/05/18","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/18","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/18","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":1,"heads":["42"]},{"date":"1405/05/18","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["44"]},{"date":"1405/05/18","machine":"SSM 3","desc":"خرابی نخ بر","count":4,"heads":["5","52","55","71"]},{"date":"1405/05/18","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/18","machine":"SSM 3","desc":"Overheating","count":3,"heads":["16","17","18"]},{"date":"1405/05/18","machine":"SSM 3","desc":"Digitens","count":3,"heads":["26","37","49"]},{"date":"1405/05/18","machine":"SSM 3","desc":"Error drive","count":2,"heads":["36","61"]},{"date":"1405/05/18","machine":"SSM 3","desc":"شل میزند","count":2,"heads":["6","48"]},{"date":"1405/05/18","machine":"SSM 3","desc":"Communication","count":6,"heads":["76","77","78","82","83","84"]},{"date":"1405/05/18","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":1,"heads":["51"]},{"date":"1405/05/19","machine":"SSM 1","desc":"خرابی نخ بر","count":15,"heads":["2","81","87","60","61","66","68","79","93","58","67","79","81","89","95"]},{"date":"1405/05/19","machine":"SSM 1","desc":"Digitens","count":11,"heads":["6","8","28","42","43","49","50","85","88","74","76"]},{"date":"1405/05/19","machine":"SSM 1","desc":"Communication","count":9,"heads":["13","14","15","16","17","18","25","26","27"]},{"date":"1405/05/19","machine":"SSM 1","desc":"شل میزند","count":2,"heads":["40","44"]},{"date":"1405/05/19","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":1,"heads":["65"]},{"date":"1405/05/19","machine":"SSM 1","desc":"خرابی دسته پوزیشن","count":1,"heads":["69"]},{"date":"1405/05/19","machine":"SSM 1","desc":"اورفید صدا میدهد","count":3,"heads":["70","82","90"]},{"date":"1405/05/19","machine":"SSM 1","desc":"Overheating","count":2,"heads":["77","78"]},{"date":"1405/05/19","machine":"SSM 2","desc":"Digitens","count":4,"heads":["2","21","22","26"]},{"date":"1405/05/19","machine":"SSM 2","desc":"Error drive","count":2,"heads":["33","50"]},{"date":"1405/05/19","machine":"SSM 2","desc":"خرابی نخ بر","count":2,"heads":["37","94"]},{"date":"1405/05/19","machine":"SSM 2","desc":"مشکل برد","count":2,"heads":["43","58"]},{"date":"1405/05/19","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["44"]},{"date":"1405/05/19","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/19","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/19","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":2,"heads":["78","92"]},{"date":"1405/05/19","machine":"SSM 2","desc":"ارور دسته پوزیشن","count":1,"heads":["5"]},{"date":"1405/05/19","machine":"SSM 2","desc":"اورفید صدا میدهد","count":1,"heads":["29"]},{"date":"1405/05/19","machine":"SSM 3","desc":"خرابی نخ بر","count":2,"heads":["5","55"]},{"date":"1405/05/19","machine":"SSM 3","desc":"شل میزند","count":2,"heads":["6","48"]},{"date":"1405/05/19","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/19","machine":"SSM 3","desc":"Overheating","count":3,"heads":["16","17","18"]},{"date":"1405/05/19","machine":"SSM 3","desc":"Error drive","count":3,"heads":["25","36","61"]},{"date":"1405/05/19","machine":"SSM 3","desc":"Digitens","count":3,"heads":["37","49","26"]},{"date":"1405/05/19","machine":"SSM 3","desc":"Communication","count":6,"heads":["76","77","78","82","83","84"]},{"date":"1405/05/19","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":4,"heads":["40","44","47","66"]},{"date":"1405/05/19","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["70"]},{"date":"1405/05/20","machine":"SSM 1","desc":"Digitens","count":12,"heads":["1","6","8","28","42","49","50","85","88","20","74","76"]},{"date":"1405/05/20","machine":"SSM 1","desc":"خرابی نخ بر","count":10,"heads":["2","40","87","58","61","66","68","93","67","79"]},{"date":"1405/05/20","machine":"SSM 1","desc":"با قطر کم داف میکند","count":1,"heads":["12"]},{"date":"1405/05/20","machine":"SSM 1","desc":"Communication","count":9,"heads":["13","14","15","16","17","18","25","26","27"]},{"date":"1405/05/20","machine":"SSM 1","desc":"سنسور","count":1,"heads":["31"]},{"date":"1405/05/20","machine":"SSM 1","desc":"تنظیم طول تراورس","count":2,"heads":["33","89"]},{"date":"1405/05/20","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":1,"heads":["86"]},{"date":"1405/05/20","machine":"SSM 1","desc":"سرامیک نخ بر","count":1,"heads":["94"]},{"date":"1405/05/20","machine":"SSM 2","desc":"Digitens","count":7,"heads":["2","21","22","26","28","52","87"]},{"date":"1405/05/20","machine":"SSM 2","desc":"Error drive","count":3,"heads":["30","33","50"]},{"date":"1405/05/20","machine":"SSM 2","desc":"خرابی نخ بر","count":4,"heads":["37","44","75","84"]},{"date":"1405/05/20","machine":"SSM 2","desc":"مشکل برد","count":2,"heads":["43","58"]},{"date":"1405/05/20","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/20","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":4,"heads":["15","87","81","92"]},{"date":"1405/05/20","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["44"]},{"date":"1405/05/20","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["77"]},{"date":"1405/05/20","machine":"SSM 3","desc":"خرابی نخ بر","count":6,"heads":["5","54","55","13","50","62"]},{"date":"1405/05/20","machine":"SSM 3","desc":"مشکل برد","count":2,"heads":["15","25"]},{"date":"1405/05/20","machine":"SSM 3","desc":"Digitens","count":1,"heads":["49"]},{"date":"1405/05/20","machine":"SSM 3","desc":"Error drive","count":2,"heads":["36","61"]},{"date":"1405/05/20","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["28"]},{"date":"1405/05/21","machine":"SSM 1","desc":"Digitens","count":11,"heads":["1","6","8","16","28","49","50","20","85","88","42"]},{"date":"1405/05/21","machine":"SSM 1","desc":"خرابی نخ بر","count":14,"heads":["11","15","58","61","65","66","68","79","93","17","25","67","4","87"]},{"date":"1405/05/21","machine":"SSM 1","desc":"با قطر کم داف میکند","count":1,"heads":["12"]},{"date":"1405/05/21","machine":"SSM 1","desc":"سنسور","count":1,"heads":["31"]},{"date":"1405/05/21","machine":"SSM 1","desc":"Overheating","count":3,"heads":["76","77","78"]},{"date":"1405/05/21","machine":"SSM 1","desc":"سایر","count":1,"heads":["30"]},{"date":"1405/05/21","machine":"SSM 1","desc":"خرابی نخ بر","count":2,"heads":["33","89"]},{"date":"1405/05/21","machine":"SSM 1","desc":"شل میزند","count":1,"heads":["95"]},{"date":"1405/05/21","machine":"SSM 1","desc":"اورفید ندارد","count":1,"heads":["15"]},{"date":"1405/05/21","machine":"SSM 2","desc":"Digitens","count":10,"heads":["9","21","24","25","28","52","56","59","75","93"]},{"date":"1405/05/21","machine":"SSM 2","desc":"خرابی نخ بر","count":2,"heads":["38","94"]},{"date":"1405/05/21","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/21","machine":"SSM 2","desc":"خرابی دسته پوزیشن","count":1,"heads":["58"]},{"date":"1405/05/21","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/21","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/21","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["44"]},{"date":"1405/05/21","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":2,"heads":["78","92"]},{"date":"1405/05/21","machine":"SSM 3","desc":"خرابی نخ بر","count":6,"heads":["5","8","21","54","62","81"]},{"date":"1405/05/21","machine":"SSM 3","desc":"مشکل برد","count":2,"heads":["15","25"]},{"date":"1405/05/21","machine":"SSM 3","desc":"Error drive","count":3,"heads":["36","49","61"]},{"date":"1405/05/21","machine":"SSM 3","desc":"سرامیک نخ بر","count":1,"heads":["28"]},{"date":"1405/05/22","machine":"SSM 1","desc":"Digitens","count":12,"heads":["1","6","8","13","20","28","35","49","50","82","85","88"]},{"date":"1405/05/22","machine":"SSM 1","desc":"خرابی نخ بر","count":11,"heads":["3","58","61","65","66","68","79","93","67","16","87"]},{"date":"1405/05/22","machine":"SSM 1","desc":"اورفید ندارد","count":1,"heads":["15"]},{"date":"1405/05/22","machine":"SSM 1","desc":"سایر ارور","count":1,"heads":["25"]},{"date":"1405/05/22","machine":"SSM 1","desc":"سنسور","count":1,"heads":["31"]},{"date":"1405/05/22","machine":"SSM 1","desc":"Overheating","count":6,"heads":["55","56","57","76","77","78"]},{"date":"1405/05/22","machine":"SSM 1","desc":"اورفید صدا میدهد","count":1,"heads":["23"]},{"date":"1405/05/22","machine":"SSM 1","desc":"تنظیم طول تراورس","count":2,"heads":["33","89"]},{"date":"1405/05/22","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":2,"heads":["37","69"]},{"date":"1405/05/22","machine":"SSM 1","desc":"شل میزند","count":2,"heads":["95","72"]},{"date":"1405/05/22","machine":"SSM 2","desc":"Digitens","count":5,"heads":["25","26","53","55","80"]},{"date":"1405/05/22","machine":"SSM 2","desc":"خرابی نخ بر","count":2,"heads":["46","94"]},{"date":"1405/05/22","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/22","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/22","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/22","machine":"SSM 2","desc":"با قطر کم داف میکند","count":1,"heads":["44"]},{"date":"1405/05/22","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["60"]},{"date":"1405/05/22","machine":"SSM 3","desc":"خرابی نخ بر","count":4,"heads":["13","54","62","76"]},{"date":"1405/05/22","machine":"SSM 3","desc":"مشکل برد","count":2,"heads":["15","25"]},{"date":"1405/05/22","machine":"SSM 3","desc":"Error drive","count":3,"heads":["36","49","61"]},{"date":"1405/05/22","machine":"SSM 3","desc":"اورفید صدا میدهد","count":2,"heads":["3","82"]},{"date":"1405/05/24","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":2,"heads":["6","67"]},{"date":"1405/05/24","machine":"SSM 1","desc":"Digitens","count":2,"heads":["16","40"]},{"date":"1405/05/24","machine":"SSM 1","desc":"خرابی نخ بر","count":5,"heads":["60","66","21","25","31"]},{"date":"1405/05/24","machine":"SSM 1","desc":"تنظیم طول تراورس","count":1,"heads":["33"]},{"date":"1405/05/24","machine":"SSM 1","desc":"خرابی دسته پوزیشن","count":1,"heads":["54"]},{"date":"1405/05/24","machine":"SSM 1","desc":"سایر","count":1,"heads":["93"]},{"date":"1405/05/24","machine":"SSM 1","desc":"اورفید صدا میدهد","count":1,"heads":["58"]},{"date":"1405/05/24","machine":"SSM 1","desc":"Error drive","count":1,"heads":["15"]},{"date":"1405/05/24","machine":"SSM 1","desc":"نخ بر ندارد","count":1,"heads":["91"]},{"date":"1405/05/24","machine":"SSM 2","desc":"سایر","count":3,"heads":["1","2","3"]},{"date":"1405/05/24","machine":"SSM 2","desc":"خرابی نخ بر","count":7,"heads":["15","44","56","87","95","37","46"]},{"date":"1405/05/24","machine":"SSM 2","desc":"Error drive","count":2,"heads":["50","30"]},{"date":"1405/05/24","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/24","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/24","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/24","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":1,"heads":["2"]},{"date":"1405/05/24","machine":"SSM 2","desc":"نخ بر ندارد","count":1,"heads":["51"]},{"date":"1405/05/24","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["25"]},{"date":"1405/05/24","machine":"SSM 3","desc":"خرابی نخ بر","count":10,"heads":["6","47","50","76","62","13","39","54","69","2"]},{"date":"1405/05/24","machine":"SSM 3","desc":"مشکل برد","count":2,"heads":["15","25"]},{"date":"1405/05/24","machine":"SSM 3","desc":"سایر ارور","count":3,"heads":["31","32","33"]},{"date":"1405/05/24","machine":"SSM 3","desc":"Error drive","count":3,"heads":["36","49","61"]},{"date":"1405/05/24","machine":"SSM 3","desc":"سرامیک نخ بر","count":2,"heads":["8","84"]},{"date":"1405/05/24","machine":"SSM 3","desc":"Digitens","count":3,"heads":["3","11","80"]},{"date":"1405/05/24","machine":"SSM 3","desc":"Overheating","count":3,"heads":["52","53","54"]},{"date":"1405/05/24","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":2,"heads":["6","39"]},{"date":"1405/05/24","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["35"]},{"date":"1405/05/25","machine":"SSM 1","desc":"خرابی نخ بر","count":10,"heads":["6","23","60","66","67","79","21","25","87","31"]},{"date":"1405/05/25","machine":"SSM 1","desc":"Error drive","count":1,"heads":["15"]},{"date":"1405/05/25","machine":"SSM 1","desc":"Digitens","count":5,"heads":["16","40","68","85","88"]},{"date":"1405/05/25","machine":"SSM 1","desc":"Overheating","count":3,"heads":["55","56","57"]},{"date":"1405/05/25","machine":"SSM 1","desc":"اورفید صدا میدهد","count":1,"heads":["58"]},{"date":"1405/05/25","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":2,"heads":["23","86"]},{"date":"1405/05/25","machine":"SSM 1","desc":"خرابی دسته پوزیشن","count":1,"heads":["54"]},{"date":"1405/05/25","machine":"SSM 1","desc":"با قطر کم داف میکند","count":1,"heads":["70"]},{"date":"1405/05/25","machine":"SSM 1","desc":"نخ بر ندارد","count":1,"heads":["91"]},{"date":"1405/05/25","machine":"SSM 2","desc":"خرابی اورفید","count":1,"heads":["25"]},{"date":"1405/05/25","machine":"SSM 2","desc":"خرابی نخ بر","count":5,"heads":["15","44","51","46","76"]},{"date":"1405/05/25","machine":"SSM 2","desc":"Error drive","count":1,"heads":["50"]},{"date":"1405/05/25","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/25","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/25","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/25","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":5,"heads":["33","37","56","76","87"]},{"date":"1405/05/25","machine":"SSM 2","desc":"نخ بر ندارد","count":2,"heads":["11","51"]},{"date":"1405/05/25","machine":"SSM 2","desc":"سرامیک نخ بر","count":2,"heads":["72","75"]},{"date":"1405/05/25","machine":"SSM 2","desc":"اورفید صدا میدهد","count":1,"heads":["29"]},{"date":"1405/05/25","machine":"SSM 3","desc":"خرابی نخ بر","count":8,"heads":["3","25","6","8","16","50","54","69"]},{"date":"1405/05/25","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/25","machine":"SSM 3","desc":"Digitens","count":4,"heads":["27","37","79","81"]},{"date":"1405/05/25","machine":"SSM 3","desc":"Overheating","count":3,"heads":["52","53","54"]},{"date":"1405/05/25","machine":"SSM 3","desc":"اورفید صدا میدهد","count":1,"heads":["35"]},{"date":"1405/05/25","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":1,"heads":["39"]},{"date":"1405/05/25","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["48"]},{"date":"1405/05/25","machine":"SSM 3","desc":"نخ بر ندارد","count":1,"heads":["50"]},{"date":"1405/05/26","machine":"SSM 1","desc":"Error drive","count":2,"heads":["15","72"]},{"date":"1405/05/26","machine":"SSM 1","desc":"Digitens","count":6,"heads":["28","49","57","68","80","85"]},{"date":"1405/05/26","machine":"SSM 1","desc":"خرابی نخ بر","count":9,"heads":["31","79","86","87","33","60","66","25","93"]},{"date":"1405/05/26","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":2,"heads":["3","83"]},{"date":"1405/05/26","machine":"SSM 1","desc":"اورفید صدا میدهد","count":2,"heads":["26","84"]},{"date":"1405/05/26","machine":"SSM 1","desc":"Overheating","count":3,"heads":["55","56","57"]},{"date":"1405/05/26","machine":"SSM 1","desc":"با قطر کم داف میکند","count":1,"heads":["38"]},{"date":"1405/05/26","machine":"SSM 2","desc":"خرابی نخ بر","count":8,"heads":["15","44","37","46","47","76","25","90"]},{"date":"1405/05/26","machine":"SSM 2","desc":"Error drive","count":2,"heads":["30","50"]},{"date":"1405/05/26","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/26","machine":"SSM 2","desc":"سنسور","count":1,"heads":["64"]},{"date":"1405/05/26","machine":"SSM 2","desc":"اورفید صدا میدهد","count":1,"heads":["29"]},{"date":"1405/05/26","machine":"SSM 2","desc":"نخ بر ندارد","count":2,"heads":["51","76"]},{"date":"1405/05/26","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":4,"heads":["53","59","93","95"]},{"date":"1405/05/26","machine":"SSM 2","desc":"سرامیک نخ بر","count":2,"heads":["72","75"]},{"date":"1405/05/26","machine":"SSM 3","desc":"Error drive","count":1,"heads":["3"]},{"date":"1405/05/26","machine":"SSM 3","desc":"خرابی نخ بر","count":4,"heads":["5","39","50","69"]},{"date":"1405/05/26","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/26","machine":"SSM 3","desc":"Digitens","count":1,"heads":["37"]},{"date":"1405/05/26","machine":"SSM 3","desc":"Overheating","count":3,"heads":["52","53","54"]},{"date":"1405/05/26","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["48"]},{"date":"1405/05/26","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":2,"heads":["74","76"]},{"date":"1405/05/26","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["6"]},{"date":"1405/05/26","machine":"SSM 3","desc":"نخ بر ندارد","count":2,"heads":["50","8"]},{"date":"1405/05/27","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":2,"heads":["3","83"]},{"date":"1405/05/27","machine":"SSM 1","desc":"Digitens","count":6,"heads":["11","22","28","37","49","85"]},{"date":"1405/05/27","machine":"SSM 1","desc":"خرابی نخ بر","count":10,"heads":["21","25","31","60","86","87","79","33","66","93"]},{"date":"1405/05/27","machine":"SSM 1","desc":"Overheating","count":6,"heads":["34","35","36","55","56","57"]},{"date":"1405/05/27","machine":"SSM 1","desc":"Error drive","count":2,"heads":["94","15"]},{"date":"1405/05/27","machine":"SSM 1","desc":"با قطر کم داف میکند","count":1,"heads":["38"]},{"date":"1405/05/27","machine":"SSM 1","desc":"اورفید صدا میدهد","count":2,"heads":["68","84"]},{"date":"1405/05/27","machine":"SSM 1","desc":"شل میزند","count":1,"heads":["82"]},{"date":"1405/05/27","machine":"SSM 1","desc":"نخ بر و سیم نخ بر ندارد","count":2,"heads":["83","86"]},{"date":"1405/05/27","machine":"SSM 2","desc":"خرابی نخ بر","count":7,"heads":["15","44","46","47","76","90","37"]},{"date":"1405/05/27","machine":"SSM 2","desc":"Error drive","count":2,"heads":["30","50"]},{"date":"1405/05/27","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/27","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/27","machine":"SSM 2","desc":"سنسور","count":2,"heads":["25","64"]},{"date":"1405/05/27","machine":"SSM 2","desc":"سرامیک نخ بر","count":2,"heads":["19","41"]},{"date":"1405/05/27","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":4,"heads":["48","53","56","66"]},{"date":"1405/05/27","machine":"SSM 2","desc":"نخ بر و سیم نخ بر ندارد","count":2,"heads":["51","76"]},{"date":"1405/05/27","machine":"SSM 3","desc":"Error drive","count":1,"heads":["3"]},{"date":"1405/05/27","machine":"SSM 3","desc":"خرابی نخ بر","count":2,"heads":["5","69"]},{"date":"1405/05/27","machine":"SSM 3","desc":"Digitens","count":2,"heads":["27","37"]},{"date":"1405/05/27","machine":"SSM 3","desc":"Overheating","count":3,"heads":["52","53","54"]},{"date":"1405/05/27","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["6"]},{"date":"1405/05/27","machine":"SSM 3","desc":"نخ بر ندارد","count":4,"heads":["8","39","50","67"]},{"date":"1405/05/27","machine":"SSM 3","desc":"اورفید صدا میدهد","count":2,"heads":["33","35"]},{"date":"1405/05/27","machine":"SSM 3","desc":"پارگی سیم نخ بر","count":3,"heads":["47","49","74"]},{"date":"1405/05/27","machine":"SSM 3","desc":"شل میزند","count":1,"heads":["48"]},{"date":"1405/05/28","machine":"SSM 1","desc":"پارگی سیم نخ بر","count":2,"heads":["3","79"]},{"date":"1405/05/28","machine":"SSM 1","desc":"Digitens","count":4,"heads":["11","37","42","72"]},{"date":"1405/05/28","machine":"SSM 1","desc":"Error drive","count":1,"heads":["15"]},{"date":"1405/05/28","machine":"SSM 1","desc":"خرابی نخ بر","count":11,"heads":["21","25","31","59","60","86","87","33","66","83","93"]},{"date":"1405/05/28","machine":"SSM 1","desc":"Overheating","count":9,"heads":["34","35","36","55","56","57","76","77","78"]},{"date":"1405/05/28","machine":"SSM 1","desc":"شل میزند","count":3,"heads":["16","32","82"]},{"date":"1405/05/28","machine":"SSM 1","desc":"با قطر کم داف میکند","count":1,"heads":["38"]},{"date":"1405/05/28","machine":"SSM 1","desc":"سرامیک نخ بر","count":1,"heads":["50"]},{"date":"1405/05/28","machine":"SSM 1","desc":"اورفید صدا میدهد","count":2,"heads":["68","84"]},{"date":"1405/05/28","machine":"SSM 2","desc":"خرابی نخ بر","count":9,"heads":["15","37","46","47","90","44","51","89","94"]},{"date":"1405/05/28","machine":"SSM 2","desc":"سنسور","count":2,"heads":["25","64"]},{"date":"1405/05/28","machine":"SSM 2","desc":"Error drive","count":2,"heads":["30","50"]},{"date":"1405/05/28","machine":"SSM 2","desc":"مشکل برد","count":1,"heads":["58"]},{"date":"1405/05/28","machine":"SSM 2","desc":"Overheating","count":3,"heads":["61","62","63"]},{"date":"1405/05/28","machine":"SSM 2","desc":"نخ بر و سیم نخ بر ندارد","count":7,"heads":["34","38","51","53","56","66","76"]},{"date":"1405/05/28","machine":"SSM 2","desc":"سرامیک نخ بر","count":1,"heads":["41"]},{"date":"1405/05/28","machine":"SSM 2","desc":"پارگی سیم نخ بر","count":2,"heads":["91","93"]},{"date":"1405/05/28","machine":"SSM 3","desc":"خرابی نخ بر","count":4,"heads":["5","69","77","70"]},{"date":"1405/05/28","machine":"SSM 3","desc":"Digitens","count":4,"heads":["27","37","47","81"]},{"date":"1405/05/28","machine":"SSM 3","desc":"مشکل برد","count":1,"heads":["15"]},{"date":"1405/05/28","machine":"SSM 3","desc":"Overheating","count":3,"heads":["52","53","54"]},{"date":"1405/05/28","machine":"SSM 3","desc":"خرابی اورفید","count":1,"heads":["6"]},{"date":"1405/05/28","machine":"SSM 3","desc":"اورفید صدا میدهد","count":2,"heads":["21","33"]},{"date":"1405/05/28","machine":"SSM 3","desc":"نخ بر و سیم نخ بر ندارد","count":6,"heads":["8","50","39","67","74","76"]}];
+let PROD_SERIES = {"بسته بندی":{"1405/01/18":103.98,"1405/01/19":94.0,"1405/01/22":82.91,"1405/01/23":187.29,"1405/01/24":163.38,"1405/01/26":203.74,"1405/01/29":100.61,"1405/01/30":207.93,"1405/01/31":203.87,"1405/02/01":173.34,"1405/02/02":149.56,"1405/02/03":182.7,"1405/02/04":122.2,"1405/02/05":152.7,"1405/02/06":126.6,"1405/02/07":143.91,"1405/02/08":130.43,"1405/02/09":72.53,"1405/02/10":208.8,"1405/02/11":244.98,"1405/02/12":243.91,"1405/02/13":204.69,"1405/02/14":148.15,"1405/02/15":115.85,"1405/02/16":115.1,"1405/02/17":167.19,"1405/02/18":165.25,"1405/02/19":166.13,"1405/02/20":162.98,"1405/02/21":135.24,"1405/02/22":177.12,"1405/02/24":176.35,"1405/02/25":101.96,"1405/02/26":140.27,"1405/02/27":88.98,"1405/02/28":147.71,"1405/02/29":169.1,"1405/02/30":108.54,"1405/02/31":189.8,"1405/03/01":185.82,"1405/03/02":92.24,"1405/03/03":105.29,"1405/03/04":140.48,"1405/03/05":93.62,"1405/03/06":80.34,"1405/03/07":162.67,"1405/03/08":102.15,"1405/03/09":83.88,"1405/03/10":147.24,"1405/03/11":143.4,"1405/03/12":220.75,"1405/03/13":136.09,"1405/03/14":179.47,"1405/03/15":187.89,"1405/03/16":79.64,"1405/03/17":111.49,"1405/03/18":170.16,"1405/03/19":200.72,"1405/03/20":162.17,"1405/03/21":189.02,"1405/03/22":162.51,"1405/03/23":95.74,"1405/03/24":119.1,"1405/03/25":169.13,"1405/03/26":129.6,"1405/03/27":106.08,"1405/03/28":82.23,"1405/03/29":135.92,"1405/03/30":89.37,"1405/03/31":76.72,"1405/04/01":109.92,"1405/04/02":101.44,"1405/04/03":95.88,"1405/04/04":222.26,"1405/04/05":160.36,"1405/04/06":108.38,"1405/04/07":124.09,"1405/04/08":137.29,"1405/04/09":153.11,"1405/04/10":133.82,"1405/04/11":101.9,"1405/04/12":43.78,"1405/04/13":156.1,"1405/04/14":110.39,"1405/04/15":81.29,"1405/04/16":73.06,"1405/04/17":102.76,"1405/04/18":70.62,"1405/04/19":70.23,"1405/04/20":38.38,"1405/04/21":69.64,"1405/04/22":77.3,"1405/04/23":104.56,"1405/04/24":106.93,"1405/04/25":94.97,"1405/04/26":96.06,"1405/04/27":44.11,"1405/04/28":119.91,"1405/04/29":80.74,"1405/04/30":122.9,"1405/04/31":66.95,"1405/05/01":59.85,"1405/05/02":98.33,"1405/05/04":44.98,"1405/05/05":111.67,"1405/05/06":139.08,"1405/05/07":106.35,"1405/05/08":102.96,"1405/05/09":159.78,"1405/05/10":148.72,"1405/05/11":105.47,"1405/05/12":87.75,"1405/05/13":94.31,"1405/05/14":175.92,"1405/05/15":99.16,"1405/05/16":150.34,"1405/05/17":121.13,"1405/05/18":57.77,"1405/05/19":117.97,"1405/05/20":118.56,"1405/05/21":106.55,"1405/05/24":94.49,"1405/05/25":137.08,"1405/05/26":78.92,"1405/05/27":126.66,"1405/05/28":90.76,"1405/05/29":0.0},"شل پیچ":{"1405/01/18":5.16,"1405/01/19":30.28,"1405/01/20":21.19,"1405/01/22":34.03,"1405/01/23":39.56,"1405/01/24":19.5,"1405/01/26":29.06,"1405/01/29":41.68,"1405/01/30":46.8,"1405/01/31":73.55,"1405/02/01":81.12,"1405/02/02":77.19,"1405/02/03":58.77,"1405/02/05":59.47,"1405/02/06":56.94,"1405/02/07":60.98,"1405/02/08":50.07,"1405/02/09":47.59,"1405/02/10":49.01,"1405/02/12":44.97,"1405/02/13":47.19,"1405/02/14":60.19,"1405/02/15":48.15,"1405/02/16":50.94,"1405/02/17":45.17,"1405/02/18":44.52,"1405/02/19":47.9,"1405/02/20":45.31,"1405/02/21":45.26,"1405/02/22":45.42,"1405/02/23":42.92,"1405/02/24":41.62,"1405/02/25":56.12,"1405/02/26":46.09,"1405/02/27":47.26,"1405/02/28":50.37,"1405/02/29":44.75,"1405/02/30":49.73,"1405/02/31":47.72,"1405/03/01":42.4,"1405/03/02":49.21,"1405/03/03":60.09,"1405/03/04":54.38,"1405/03/05":53.15,"1405/03/06":44.48,"1405/03/07":42.11,"1405/03/08":31.95,"1405/03/09":49.31,"1405/03/10":43.12,"1405/03/11":45.64,"1405/03/12":40.75,"1405/03/13":38.73,"1405/03/14":44.63,"1405/03/16":45.77,"1405/03/17":41.79,"1405/03/18":39.75,"1405/03/19":47.02,"1405/03/20":41.43,"1405/03/21":43.72,"1405/03/22":41.7,"1405/03/23":39.53,"1405/03/24":37.9,"1405/03/25":32.11,"1405/03/26":34.53,"1405/03/27":46.02,"1405/03/28":47.62,"1405/03/29":42.0,"1405/03/30":43.86,"1405/03/31":43.57,"1405/04/01":49.74,"1405/04/02":36.61,"1405/04/03":34.73,"1405/04/05":32.08,"1405/04/06":38.37,"1405/04/07":38.66,"1405/04/08":49.1,"1405/04/09":42.17,"1405/04/10":44.19,"1405/04/11":38.41,"1405/04/12":39.09,"1405/04/13":33.32,"1405/04/14":43.14,"1405/04/15":51.31,"1405/04/16":48.64,"1405/04/17":44.1,"1405/04/18":43.71,"1405/04/19":33.5,"1405/04/20":47.39,"1405/04/21":32.93,"1405/04/22":42.84,"1405/04/23":45.37,"1405/04/24":44.39,"1405/04/25":44.22,"1405/04/26":47.25,"1405/04/27":44.41,"1405/04/28":43.53,"1405/04/29":45.43,"1405/04/30":34.08,"1405/04/31":51.04,"1405/05/01":49.76,"1405/05/02":39.94,"1405/05/03":43.69,"1405/05/04":38.43,"1405/05/05":38.06,"1405/05/06":57.88,"1405/05/07":44.42,"1405/05/10":39.61,"1405/05/11":35.45,"1405/05/12":37.12,"1405/05/13":40.71,"1405/05/14":48.11,"1405/05/15":51.38,"1405/05/16":21.25,"1405/05/17":41.51,"1405/05/18":41.55,"1405/05/19":40.99,"1405/05/20":44.76,"1405/05/21":49.19,"1405/05/22":50.54,"1405/05/24":47.91,"1405/05/25":52.88,"1405/05/26":50.66,"1405/05/27":38.19,"1405/05/28":42.31},"سفت پیچ":{"1405/01/24":45.82,"1405/01/26":36.68,"1405/01/29":26.04,"1405/01/30":37.22,"1405/01/31":25.2,"1405/02/01":46.95,"1405/02/02":40.48,"1405/02/03":30.59,"1405/02/05":34.72,"1405/02/06":39.82,"1405/02/07":31.85,"1405/02/08":40.34,"1405/02/09":34.56,"1405/02/10":42.92,"1405/02/12":40.71,"1405/02/13":31.57,"1405/02/14":36.47,"1405/02/16":40.05,"1405/02/17":55.76,"1405/02/18":18.19,"1405/02/19":42.64,"1405/02/20":38.36,"1405/02/21":42.31,"1405/02/22":41.23,"1405/02/23":32.08,"1405/02/24":33.05,"1405/02/25":32.34,"1405/02/26":30.67,"1405/02/27":43.06,"1405/02/28":51.24,"1405/02/29":49.31,"1405/02/30":53.99,"1405/02/31":50.57,"1405/03/01":34.53,"1405/03/02":42.81,"1405/03/03":62.0,"1405/03/04":47.58,"1405/03/05":48.27,"1405/03/06":51.75,"1405/03/07":48.81,"1405/03/09":53.54,"1405/03/10":49.67,"1405/03/11":42.49,"1405/03/12":36.58,"1405/03/13":36.62,"1405/03/14":46.53,"1405/03/15":32.75,"1405/03/16":26.05,"1405/03/17":26.67,"1405/03/18":29.66,"1405/03/19":29.13,"1405/03/20":27.37,"1405/03/21":32.49,"1405/03/22":25.7,"1405/03/23":27.83,"1405/03/24":24.6,"1405/03/25":30.86,"1405/03/26":28.37,"1405/03/27":30.64,"1405/03/28":38.12,"1405/03/30":26.59,"1405/03/31":29.85,"1405/04/01":33.35,"1405/04/02":33.66,"1405/04/03":31.88,"1405/04/06":24.66,"1405/04/07":36.22,"1405/04/08":41.71,"1405/04/09":39.78,"1405/04/10":25.38,"1405/04/11":33.06,"1405/04/13":29.06,"1405/04/14":25.18,"1405/04/15":22.69,"1405/04/16":27.98,"1405/04/17":29.83,"1405/04/18":24.91,"1405/04/20":25.67,"1405/04/21":28.96,"1405/04/22":24.22,"1405/04/23":27.12,"1405/04/24":31.03,"1405/04/25":23.87,"1405/04/27":19.81,"1405/04/28":28.57,"1405/04/29":27.44,"1405/04/30":25.4,"1405/04/31":21.12,"1405/05/01":22.68,"1405/05/02":19.69,"1405/05/03":22.5,"1405/05/04":25.39,"1405/05/05":31.91,"1405/05/06":40.15,"1405/05/07":38.81,"1405/05/08":34.9,"1405/05/09":38.24,"1405/05/10":30.56,"1405/05/11":31.05,"1405/05/12":21.0,"1405/05/14":31.93,"1405/05/15":32.76,"1405/05/17":19.09,"1405/05/19":36.49,"1405/05/20":30.56,"1405/05/21":24.44,"1405/05/24":31.14,"1405/05/25":36.36,"1405/05/26":27.99,"1405/05/27":33.69,"1405/05/28":24.17},"رنگرزی":{"1405/01/15":36.29,"1405/01/16":37.96,"1405/01/17":36.56,"1405/01/18":30.61,"1405/01/19":49.48,"1405/01/20":46.22,"1405/01/22":44.18,"1405/01/23":33.6,"1405/01/24":47.19,"1405/01/26":47.75,"1405/01/29":56.83,"1405/01/30":47.91,"1405/01/31":52.79,"1405/02/01":40.12,"1405/02/02":64.55,"1405/02/03":64.09,"1405/02/05":57.41,"1405/02/06":36.73,"1405/02/07":52.28,"1405/02/08":36.55,"1405/02/09":28.54,"1405/02/10":57.66,"1405/02/12":66.67,"1405/02/13":44.33,"1405/02/14":46.94,"1405/02/15":59.5,"1405/02/16":53.32,"1405/02/17":45.52,"1405/02/19":56.89,"1405/02/20":46.91,"1405/02/21":60.8,"1405/02/22":32.41,"1405/02/23":42.37,"1405/02/26":64.93,"1405/02/27":58.8,"1405/02/28":52.71,"1405/02/29":54.14,"1405/02/30":52.11,"1405/02/31":53.38,"1405/03/02":48.73,"1405/03/03":57.83,"1405/03/04":41.62,"1405/03/05":41.37,"1405/03/06":33.84,"1405/03/07":58.1,"1405/03/09":66.64,"1405/03/10":40.55,"1405/03/11":22.18,"1405/03/12":50.37,"1405/03/13":46.73,"1405/03/16":53.55,"1405/03/17":40.07,"1405/03/18":47.64,"1405/03/19":48.05,"1405/03/20":36.36,"1405/03/23":43.7,"1405/03/24":37.15,"1405/03/25":28.06,"1405/03/26":42.73,"1405/03/27":28.71,"1405/03/28":42.64,"1405/03/29":7.83,"1405/03/30":54.27,"1405/03/31":47.63,"1405/04/01":50.31,"1405/04/02":27.35,"1405/04/03":26.98,"1405/04/06":54.18,"1405/04/07":41.01,"1405/04/08":44.34,"1405/04/09":47.64,"1405/04/10":30.32,"1405/04/11":38.33,"1405/04/13":40.91,"1405/04/14":34.54,"1405/04/15":25.97,"1405/04/16":29.5,"1405/04/17":25.35,"1405/04/18":23.75,"1405/04/20":38.06,"1405/04/21":28.86,"1405/04/22":39.46,"1405/04/23":37.81,"1405/04/24":33.76,"1405/04/25":28.45,"1405/04/26":61.27,"1405/04/27":35.81,"1405/04/28":37.76,"1405/04/29":28.1,"1405/04/30":20.92,"1405/04/31":18.78,"1405/05/01":16.61,"1405/05/02":35.94,"1405/05/03":29.68,"1405/05/04":45.28,"1405/05/05":23.55,"1405/05/06":26.76,"1405/05/07":48.08,"1405/05/10":31.65,"1405/05/11":35.34,"1405/05/12":32.91,"1405/05/13":45.71,"1405/05/14":38.83,"1405/05/15":27.25,"1405/05/16":17.82,"1405/05/17":30.1,"1405/05/18":25.4,"1405/05/19":34.21,"1405/05/20":27.01,"1405/05/21":18.6,"1405/05/22":23.48,"1405/05/24":37.37,"1405/05/25":46.74,"1405/05/26":24.72,"1405/05/27":45.16,"1405/05/28":38.99,"1405/05/29":0.0}};
+let PROD_MONTHLY = {"بسته بندی":{"1405/01":147.84,"1405/02":149.23,"1405/03":132.14,"1405/04":102.83,"1405/05":103.89},"شل پیچ":{"1405/01":41.5,"1405/02":50.58,"1405/03":43.88,"1405/04":42.46,"1405/05":43.93},"سفت پیچ":{"1405/01":32.43,"1405/02":40.36,"1405/03":33.38,"1405/04":28.09,"1405/05":30.4},"رنگرزی":{"1405/01":42.99,"1405/02":50.7,"1405/03":43.16,"1405/04":34.22,"1405/05":32.19}};
+
+const MONTH_NAMES = {'01':'فروردین','02':'اردیبهشت','03':'خرداد','04':'تیر','05':'مرداد','06':'شهریور','07':'مهر','08':'آبان','09':'آذر','10':'دی','11':'بهمن','12':'اسفند'};
+
+const fM = document.getElementById('fMachine');
+const fDS = document.getElementById('fDateStart');
+const fDE = document.getElementById('fDateEnd');
+const fGD = document.getElementById('fGaugeDate');
+
+// (re)build the filter dropdowns from whatever is currently in DATA / PROD_SERIES.
+// Called on initial load, and again after a new Excel file is parsed.
+function populateFilters(){
+  const machines = Array.from(new Set(DATA.map(d=>d.machine))).sort();
+  const dates = Array.from(new Set(DATA.map(d=>d.date).filter(Boolean))).sort();
+
+  fM.innerHTML = '<option value="all">همه دستگاه‌ها</option>' + machines.map(m=>`<option value="${m}">${m}</option>`).join('');
+  fDS.innerHTML = '<option value="">ابتدا</option>' + dates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  fDE.innerHTML = '<option value="">انتها</option>' + dates.map(d=>`<option value="${d}">${d}</option>`).join('');
+
+  // gauge date selector — union of all production dates across sections
+  const allProdDatesSet = new Set();
+  Object.values(PROD_SERIES).forEach(s => Object.keys(s).forEach(d => allProdDatesSet.add(d)));
+  const allProdDates = Array.from(allProdDatesSet).sort();
+  fGD.innerHTML = allProdDates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  if(allProdDates.length) fGD.value = allProdDates[allProdDates.length-1];
+}
+populateFilters();
+
+let chart, trendChart, monthlyChart;
+let prodCharts = {};
+let trendMode = 'daily';
+
+function weekKey(dateStr){
+  const parts = dateStr.split('/').map(Number);
+  const day = parts[2];
+  const weekNum = Math.ceil(day/7);
+  return parts[0]+'/'+String(parts[1]).padStart(2,'0')+' - هفته '+weekNum;
+}
+
+function inRange(dateStr, start, end){
+  if(!dateStr) return false;
+  if(start && dateStr < start) return false;
+  if(end && dateStr > end) return false;
+  return true;
+}
+
+const PROD_COLORS = {
+  'بسته بندی': '#2a78d6',
+  'شل پیچ': '#4caf7d',
+  'سفت پیچ': '#d85a30',
+  'رنگرزی': '#8a5fd6'
+};
+
+// build one card + canvas per production section, once
+const prodGrid = document.getElementById('prodGrid');
+Object.keys(PROD_SERIES).forEach(section => {
+  const card = document.createElement('div');
+  card.className = 'prod-card';
+  card.innerHTML = `
+    <div class="prod-card-title">${section}</div>
+    <div class="prod-chart-wrap"><canvas id="prod_${section}" role="img" aria-label="نمودار خطی تولید نفر ساعت روزانه بخش ${section}"></canvas></div>
+  `;
+  prodGrid.appendChild(card);
+});
+
+// build gauge cards once
+const gaugeGrid = document.getElementById('gaugeGrid');
+Object.keys(PROD_SERIES).forEach(section => {
+  const card = document.createElement('div');
+  card.className = 'gauge-card';
+  card.innerHTML = `
+    <div class="gauge-card-title">${section}</div>
+    <canvas id="gauge_${section}" width="240" height="200" role="img" aria-label="نمودار گیج تولید نفر ساعت روزانه بخش ${section}"></canvas>
+    <div class="gauge-value" id="gaugeval_${section}"></div>
+  `;
+  gaugeGrid.appendChild(card);
+});
+
+// Real speedometer style gauge: 240deg sweep (from 210deg to -30deg going clockwise),
+// dark dial face, tick marks + numbers, colored danger/caution/good arc band, sleek needle, chrome hub.
+function drawGauge(canvasId, value, maxVal, accentColor){
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || canvas.width;
+  const cssH = canvas.clientHeight || canvas.height;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const w = cssW, h = cssH;
+  ctx.clearRect(0,0,w,h);
+
+  const cx = w/2, cy = h/2 + 8;
+  const radius = Math.min(w/2, h/2) - 20;
+
+  // sweep: 210deg (bottom-left) to -30deg (bottom-right), going clockwise through top => total 240deg
+  const startDeg = 210, endDeg = -30;
+  const toRad = (deg) => deg * Math.PI/180;
+  const totalDeg = startDeg - endDeg; // 240
+
+  function angleForRatio(r){
+    return toRad(startDeg - r*totalDeg);
+  }
+
+  // dial face (dark circle)
+  const faceGrad = ctx.createRadialGradient(cx, cy, radius*0.15, cx, cy, radius);
+  faceGrad.addColorStop(0, '#2b2b2e');
+  faceGrad.addColorStop(1, '#17171a');
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 10, 0, 2*Math.PI);
+  ctx.fillStyle = faceGrad;
+  ctx.fill();
+
+  // outer chrome rim
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 10, 0, 2*Math.PI);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#4a4a4d';
+  ctx.stroke();
+
+  // colored zone band (red -> yellow -> green), thin arc near the tick marks
+  const zoneColors = ['#e5484d', '#f5b942', '#3fbf68'];
+  const zoneRadius = radius - 2;
+  for(let i=0;i<3;i++){
+    const r0 = i/3, r1 = (i+1)/3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, zoneRadius, angleForRatio(r0), angleForRatio(r1), true);
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = zoneColors[i];
+    ctx.lineCap = 'butt';
+    ctx.stroke();
+  }
+
+  // tick marks (major every 1/6, minor every 1/24) + numbers
+  const majorTicks = 6;
+  const minorPerMajor = 4;
+  for(let i=0; i<=majorTicks*minorPerMajor; i++){
+    const r = i/(majorTicks*minorPerMajor);
+    const ang = angleForRatio(r);
+    const isMajor = (i % minorPerMajor === 0);
+    const tickOuter = radius - 12;
+    const tickInner = isMajor ? radius - 24 : radius - 18;
+    const x1 = cx + tickOuter*Math.cos(ang), y1 = cy - tickOuter*Math.sin(ang);
+    const x2 = cx + tickInner*Math.cos(ang), y2 = cy - tickInner*Math.sin(ang);
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.lineWidth = isMajor ? 2 : 1;
+    ctx.strokeStyle = isMajor ? '#f0efe9' : '#8a8a8d';
+    ctx.stroke();
+
+    if(isMajor){
+      const labelRadius = radius - 36;
+      const lx = cx + labelRadius*Math.cos(ang), ly = cy - labelRadius*Math.sin(ang);
+      const labelVal = Math.round((maxVal * r));
+      ctx.fillStyle = '#e5e4de';
+      ctx.font = '600 10px Tahoma';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(labelVal.toLocaleString('fa-IR'), lx, ly);
+    }
+  }
+
+  // unit label
+  ctx.fillStyle = '#9a9a9d';
+  ctx.font = '9px Tahoma';
+  ctx.textAlign = 'center';
+  ctx.fillText('kg/نفرساعت', cx, cy - radius*0.42);
+
+  // digital value readout
+  ctx.fillStyle = accentColor || '#f0efe9';
+  ctx.font = '700 20px Tahoma';
+  ctx.textAlign = 'center';
+  ctx.fillText(Math.round(value).toLocaleString('fa-IR'), cx, cy - radius*0.15);
+
+  // needle
+  const ratio = maxVal > 0 ? Math.min(Math.max(value / maxVal, 0), 1) : 0;
+  const needleAngle = angleForRatio(ratio);
+  const needleLen = radius - 20;
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.moveTo(cx - 5*Math.sin(needleAngle), cy - 5*Math.cos(needleAngle));
+  ctx.lineTo(cx + needleLen*Math.cos(needleAngle), cy - needleLen*Math.sin(needleAngle));
+  ctx.lineTo(cx + 5*Math.sin(needleAngle), cy + 5*Math.cos(needleAngle));
+  ctx.closePath();
+  ctx.fillStyle = '#e5484d';
+  ctx.fill();
+  ctx.restore();
+
+  // needle tail
+  const tailLen = 14;
+  ctx.beginPath();
+  ctx.moveTo(cx - 5*Math.sin(needleAngle), cy - 5*Math.cos(needleAngle));
+  ctx.lineTo(cx - tailLen*Math.cos(needleAngle), cy + tailLen*Math.sin(needleAngle));
+  ctx.lineTo(cx + 5*Math.sin(needleAngle), cy + 5*Math.cos(needleAngle));
+  ctx.closePath();
+  ctx.fillStyle = '#e5484d';
+  ctx.fill();
+
+  // chrome hub
+  const hubGrad = ctx.createRadialGradient(cx-2, cy-2, 1, cx, cy, 9);
+  hubGrad.addColorStop(0, '#f0efe9');
+  hubGrad.addColorStop(1, '#8a8a8d');
+  ctx.beginPath();
+  ctx.arc(cx, cy, 9, 0, 2*Math.PI);
+  ctx.fillStyle = hubGrad;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 9, 0, 2*Math.PI);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#4a4a4d';
+  ctx.stroke();
+}
+
+function renderGauges(){
+  const gd = fGD.value;
+  Object.keys(PROD_SERIES).forEach(section => {
+    const series = PROD_SERIES[section];
+    const values = Object.values(series);
+    const maxRaw = values.length ? Math.max(...values) : 0;
+    const maxVal = Math.max(10, Math.ceil((maxRaw * 1.15) / 10) * 10);
+    const val = series[gd] !== undefined ? series[gd] : 0;
+    drawGauge('gauge_' + section, val, maxVal, PROD_COLORS[section]);
+    document.getElementById('gaugeval_' + section).textContent =
+      (series[gd] !== undefined ? 'ثبت‌شده برای' : 'بدون ثبت در') + ' ' + gd;
+  });
+}
+
+function renderMonthly(){
+  const months = Array.from(new Set(Object.values(PROD_MONTHLY).flatMap(s=>Object.keys(s)))).sort();
+  const labels = months.map(mk => MONTH_NAMES[mk.split('/')[1]] || mk);
+  const datasets = Object.keys(PROD_MONTHLY).map(section => ({
+    label: section,
+    data: months.map(mk => PROD_MONTHLY[section][mk] !== undefined ? PROD_MONTHLY[section][mk] : null),
+    backgroundColor: PROD_COLORS[section] || '#666',
+    borderRadius: 4,
+    maxBarThickness: 28
+  }));
+
+  if(monthlyChart) monthlyChart.destroy();
+  monthlyChart = new Chart(document.getElementById('monthlyChart'), {
+    type: 'bar',
+    data: { labels, datasets },
+    plugins: [ChartDataLabels],
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { color: '#1a1a19', font: {size: 12} } },
+        datalabels: {
+          anchor: 'end', align: 'top', offset: 2,
+          color: '#1a1a19', font: { size: 10, weight: '600' },
+          formatter: (v) => v !== null ? v.toLocaleString('fa-IR') : ''
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#6b6a65', font: {size: 11} } },
+        y: { grid: { color: '#e1e0d9' }, ticks: { color: '#6b6a65' }, beginAtZero: true, title: { display: true, text: 'kg/نفرساعت', color: '#6b6a65', font: {size: 11} } }
+      }
+    }
+  });
+}
+
+function render(){
+  const m = fM.value;
+  const start = fDS.value;
+  const end = fDE.value;
+  const filtered = DATA.filter(r => (m==='all'||r.machine===m) && inRange(r.date, start, end));
+
+  const totalHeads = filtered.reduce((s,r)=>s+r.count,0);
+  const totalRecords = filtered.length;
+  const uniqueTypes = new Set(filtered.map(r=>r.desc)).size;
+
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric-card">
+      <div class="metric-label">مجموع هد خراب</div>
+      <div class="metric-value">${totalHeads.toLocaleString('fa-IR')}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">تعداد ثبت‌ها</div>
+      <div class="metric-value">${totalRecords.toLocaleString('fa-IR')}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">انواع خرابی</div>
+      <div class="metric-value">${uniqueTypes.toLocaleString('fa-IR')}</div>
+    </div>
+  `;
+
+  const byDesc = {};
+  filtered.forEach(r=>{ byDesc[r.desc] = (byDesc[r.desc]||0) + r.count; });
+  const sorted = Object.entries(byDesc).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  const labels = sorted.map(x=>x[0]);
+  const values = sorted.map(x=>x[1]);
+
+  if(chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: values, backgroundColor: '#2a78d6', borderRadius: 4, maxBarThickness: 22 }] },
+    plugins: [ChartDataLabels],
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { left: 4, right: 28 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          anchor: 'end', align: 'end', offset: 2,
+          color: '#1a1a19', font: { size: 11, weight: '600' },
+          formatter: (v) => v.toLocaleString('fa-IR')
+        }
+      },
+      scales: {
+        x: { grid: { color: '#e1e0d9' }, ticks: { color: '#6b6a65' } },
+        y: { grid: { display: false }, ticks: { color: '#1a1a19', autoSkip: false, font: {size: 11} } }
+      }
+    }
+  });
+
+  const trendFiltered = DATA.filter(r => (m==='all'||r.machine===m) && r.date);
+  const byPeriod = {};
+  trendFiltered.forEach(r=>{
+    const key = trendMode==='daily' ? r.date : weekKey(r.date);
+    byPeriod[key] = (byPeriod[key]||0) + r.count;
+  });
+  const periodKeys = Object.keys(byPeriod).sort();
+  const periodValues = periodKeys.map(k=>byPeriod[k]);
+
+  if(trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels: periodKeys,
+      datasets: [{
+        data: periodValues,
+        borderColor: '#d85a30',
+        backgroundColor: 'rgba(216,90,48,0.1)',
+        fill: true,
+        tension: 0.25,
+        pointRadius: 3,
+        pointBackgroundColor: '#d85a30',
+        borderWidth: 2
+      }]
+    },
+    plugins: [ChartDataLabels],
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 20 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          display: 'auto',
+          align: 'top', anchor: 'end', offset: 4,
+          color: '#d85a30', font: { size: 10, weight: '600' },
+          formatter: (v) => v.toLocaleString('fa-IR')
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#6b6a65', maxRotation: 45, autoSkip: true, font: {size: 10} } },
+        y: { grid: { color: '#e1e0d9' }, ticks: { color: '#6b6a65' }, beginAtZero: true }
+      }
+    }
+  });
+
+  const recur = {};
+  filtered.forEach(r=>{
+    if(!r.date) return;
+    if(!recur[r.desc]) recur[r.desc] = { days: new Set(), total: 0, machines: new Set(), headCounts: {} };
+    recur[r.desc].days.add(r.date + '|' + r.machine);
+    recur[r.desc].total += r.count;
+    recur[r.desc].machines.add(r.machine);
+    (r.heads||[]).forEach(h=>{
+      const key = r.machine + '#' + h;
+      recur[r.desc].headCounts[key] = (recur[r.desc].headCounts[key]||0) + 1;
+    });
+  });
+  const recurSorted = Object.entries(recur)
+    .map(([desc,v])=>{
+      const headEntries = Object.entries(v.headCounts)
+        .filter(x=>x[1] >= 2)
+        .sort((a,b)=>b[1]-a[1])
+        .slice(0,8)
+        .map(([key,cnt])=>{
+          const [mach,head] = key.split('#');
+          return `<span class="head-badge">${mach} - هد ${head} (${cnt} بار)</span>`;
+        });
+      return {
+        desc,
+        occ: v.days.size,
+        total: v.total,
+        machines: Array.from(v.machines).join('، '),
+        headsHtml: headEntries.length ? headEntries.join(' ') : '<span class="muted">هد تکرارشونده مشخصی ندارد</span>'
+      };
+    })
+    .filter(x=>x.occ >= 3)
+    .sort((a,b)=>b.occ-a.occ)
+    .slice(0,12);
+
+  let rows = recurSorted.map(x=>`
+    <tr>
+      <td>${x.desc}</td>
+      <td>${x.occ}</td>
+      <td>${x.total}</td>
+      <td class="muted">${x.machines}</td>
+      <td>${x.headsHtml}</td>
+    </tr>`).join('');
+  if(!rows) rows = `<tr><td colspan="5" class="muted" style="text-align:center; padding:16px;">موردی با تکرار بالا در این فیلتر یافت نشد</td></tr>`;
+
+  document.getElementById('recurTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>نوع خرابی</th>
+        <th>تعداد روز-دستگاه</th>
+        <th>جمع هد خراب</th>
+        <th>دستگاه‌ها</th>
+        <th>هدهای پرتکرار (۲ بار به بالا)</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  // separate production chart per section (independent of machine filter, uses date range only)
+  Object.keys(PROD_SERIES).forEach(section => {
+    const series = PROD_SERIES[section];
+    let secDates = Object.keys(series).sort();
+    secDates = secDates.filter(d => inRange(d, start, end));
+    const values = secDates.map(d => series[d]);
+
+    if(prodCharts[section]) prodCharts[section].destroy();
+    prodCharts[section] = new Chart(document.getElementById('prod_' + section), {
+      type: 'line',
+      data: {
+        labels: secDates,
+        datasets: [{
+          data: values,
+          borderColor: PROD_COLORS[section] || '#2a78d6',
+          backgroundColor: (PROD_COLORS[section] || '#2a78d6') + '1a',
+          fill: true,
+          tension: 0.25,
+          pointRadius: 2,
+          borderWidth: 2
+        }]
+      },
+      plugins: [ChartDataLabels],
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: 18 } },
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            display: 'auto',
+            align: 'top', anchor: 'end', offset: 3,
+            color: PROD_COLORS[section] || '#1a1a19',
+            font: { size: 9, weight: '600' },
+            formatter: (v) => (v !== null && v !== undefined) ? Math.round(v).toLocaleString('fa-IR') : ''
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#6b6a65', maxRotation: 45, autoSkip: true, font: {size: 9} } },
+          y: { grid: { color: '#e1e0d9' }, ticks: { color: '#6b6a65', font: {size: 10} }, beginAtZero: true, title: { display: true, text: 'kg/نفرساعت', color: '#6b6a65', font: {size: 10} } }
+        }
+      }
+    });
+  });
+}
+
+document.getElementById('btnDaily').addEventListener('click', function(){
+  trendMode='daily';
+  this.classList.add('active');
+  document.getElementById('btnWeekly').classList.remove('active');
+  render();
+});
+document.getElementById('btnWeekly').addEventListener('click', function(){
+  trendMode='weekly';
+  this.classList.add('active');
+  document.getElementById('btnDaily').classList.remove('active');
+  render();
+});
+fM.addEventListener('change', render);
+fDS.addEventListener('change', render);
+fDE.addEventListener('change', render);
+fGD.addEventListener('change', renderGauges);
+
+render();
+renderGauges();
+renderMonthly();
+
+// ==========================================================================
+// Excel (xlsb/xlsx) re-import — lets the person refresh this exact dashboard
+// with a newer copy of the source workbook, entirely client-side (nothing is
+// uploaded anywhere). Sheet layout/columns mirror what was used to build the
+// original embedded data above.
+// ==========================================================================
+
+function sheetToAOA(wb, name){
+  const ws = wb.Sheets[name];
+  if(!ws) return null;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  range.s.c = 0; // force column A as index 0 regardless of the sheet's actual used-range start
+  return XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null, range});
+}
+function xlJalaliStr(v){
+  if(v === null || v === undefined) return null;
+  const n = Number(v);
+  if(!Number.isFinite(n)) return null;
+  const ds = String(Math.trunc(n));
+  if(ds.length !== 8) return null;
+  return ds.slice(0,4)+'/'+ds.slice(4,6)+'/'+ds.slice(6,8);
+}
+function xlIsNumber(x){
+  if(x === null || x === undefined || x === '') return false;
+  return Number.isFinite(Number(x));
+}
+function xlParseUnits(s){
+  if(s === null || s === undefined) return [];
+  s = String(s).trim();
+  if(s === '' || s.toLowerCase() === 'nan') return [];
+  return s.split(/[+,،]/).map(p=>p.trim()).filter(p=>p!=='');
+}
+function xlCleanHead(h){
+  const m = h.match(/^\(?(\d+)/);
+  return m ? m[1] : h;
+}
+
+function extractRecordsFromWorkbook(wb){
+  const aoa = sheetToAOA(wb, 'ثبت هد های خراب دستگاه ها');
+  if(!aoa) return null;
+  const records = [];
+  for(let i=4;i<aoa.length;i++){
+    const row = aoa[i] || [];
+    const dateRaw = row[1], machine = row[2], desc = row[3];
+    if(machine===null||machine===undefined||desc===null||desc===undefined) continue;
+    const machineS = String(machine).trim().toUpperCase();
+    const descS = String(desc).trim();
+    const dateStr = xlJalaliStr(dateRaw);
+
+    let units = xlParseUnits(row[4]);
+    if(units.length===0) units = xlParseUnits(row[10]);
+    if(units.length===0) units = xlParseUnits(row[6]);
+    if(units.length===0) units = xlParseUnits(row[8]);
+    units = units.map(xlCleanHead);
+
+    let count = null;
+    if(xlIsNumber(row[5])) count = Math.trunc(Number(row[5]));
+    if(count===null && units.length>0) count = units.length;
+    if(count===null && xlIsNumber(row[11])) count = Math.trunc(Number(row[11]));
+    if(count===null) count = units.length>0 ? units.length : 1;
+
+    records.push({date:dateStr, machine:machineS, desc:descS, count, heads:units});
+  }
+  return records;
+}
+
+function extractDailyFromWorkbook(wb, sheetName, dateCol, hoursCol, prodCol, headerRow){
+  const a = sheetToAOA(wb, sheetName);
+  if(!a) return null;
+  const daily = {};
+  for(let i=headerRow;i<a.length;i++){
+    const row = a[i] || [];
+    const d = xlJalaliStr(row[dateCol]);
+    if(d===null) continue;
+    const h = row[hoursCol], p = row[prodCol];
+    if(!xlIsNumber(h) || !xlIsNumber(p)) continue;
+    const hn = Number(h), pn = Number(p);
+    if(hn<=0) continue;
+    if(!daily[d]) daily[d] = {hours:0, prod:0};
+    daily[d].hours += hn;
+    daily[d].prod += pn;
+  }
+  const result = {};
+  for(const d in daily) result[d] = Math.round((daily[d].prod/daily[d].hours*1000)*100)/100;
+  return result;
+}
+
+function extractMonthlyFromWorkbook(wb, sheetName, dateCol, hoursCol, prodCol, headerRow){
+  const a = sheetToAOA(wb, sheetName);
+  if(!a) return null;
+  const monthly = {};
+  for(let i=headerRow;i<a.length;i++){
+    const row = a[i] || [];
+    const dRaw = row[dateCol];
+    if(dRaw===null || dRaw===undefined) continue;
+    const n = Number(dRaw);
+    if(!Number.isFinite(n)) continue;
+    const ds = String(Math.trunc(n));
+    if(ds.length!==8) continue;
+    const key = ds.slice(0,4)+'/'+ds.slice(4,6);
+    const h = row[hoursCol], p = row[prodCol];
+    if(!xlIsNumber(h) || !xlIsNumber(p)) continue;
+    const hn = Number(h), pn = Number(p);
+    if(hn<=0) continue;
+    if(!monthly[key]) monthly[key] = {hours:0, prod:0};
+    monthly[key].hours += hn;
+    monthly[key].prod += pn;
+  }
+  const result = {};
+  for(const k in monthly) result[k] = Math.round((monthly[k].prod/monthly[k].hours*1000)*100)/100;
+  return result;
+}
+
+const fileInput = document.getElementById('fileInput');
+const uploadStatus = document.getElementById('uploadStatus');
+
+// ==========================================================================
+// One-click refresh — remembers which file the person picked (via the File
+// System Access API, in browsers that support it: Chrome/Edge) so future
+// visits can re-read the SAME file with a single click on "بروزرسانی",
+// no folder browsing needed. Falls back to the plain file picker everywhere
+// else (Firefox/Safari, or if the file was opened over file:// in a way that
+// blocks the API).
+// ==========================================================================
+
+const btnRefresh = document.getElementById('btnRefresh');
+const supportsFSAccess = 'showOpenFilePicker' in window;
+
+// tiny IndexedDB key-value helper (native handles are structured-cloneable)
+const HANDLE_DB = 'headKhaliDashboardDB', HANDLE_STORE = 'handles', HANDLE_KEY = 'sourceFile';
+function idbOpen(){
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(HANDLE_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(HANDLE_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSetHandle(handle){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(HANDLE_STORE, 'readwrite');
+    tx.objectStore(HANDLE_STORE).put(handle, HANDLE_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbGetHandle(){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(HANDLE_STORE, 'readonly');
+    const req = tx.objectStore(HANDLE_STORE).get(HANDLE_KEY);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function loadFromWorkbookBuffer(buf){
+  const wb = XLSX.read(buf, {type:'array'});
+  const newRecords = extractRecordsFromWorkbook(wb);
+  if(!newRecords) throw new Error('شیت «ثبت هد های خراب دستگاه ها» در این فایل پیدا نشد.');
+
+  DATA = newRecords;
+  PROD_SERIES = {
+    'بسته بندی': extractDailyFromWorkbook(wb, 'شاخص بسته بندی', 1, 8, 10, 5) || {},
+    'شل پیچ': extractDailyFromWorkbook(wb, 'شاخص شل پیچ روزانه', 1, 8, 10, 5) || {},
+    'سفت پیچ': extractDailyFromWorkbook(wb, 'شاخص سفت پیچ روزانه', 1, 7, 9, 5) || {},
+    'رنگرزی': extractDailyFromWorkbook(wb, 'شاخص رنگرزی روزانه', 1, 11, 10, 4) || {}
+  };
+  PROD_MONTHLY = {
+    'بسته بندی': extractMonthlyFromWorkbook(wb, 'شاخص بسته بندی', 1, 8, 10, 5) || {},
+    'شل پیچ': extractMonthlyFromWorkbook(wb, 'شاخص شل پیچ روزانه', 1, 8, 10, 5) || {},
+    'سفت پیچ': extractMonthlyFromWorkbook(wb, 'شاخص سفت پیچ روزانه', 1, 7, 9, 5) || {},
+    'رنگرزی': extractMonthlyFromWorkbook(wb, 'شاخص رنگرزی روزانه', 1, 11, 10, 4) || {}
+  };
+
+  populateFilters();
+  render();
+  renderGauges();
+  renderMonthly();
+
+  const validDates = Array.from(new Set(DATA.map(d=>d.date).filter(Boolean))).sort();
+  return { rows: DATA.length, lastDate: validDates.length ? validDates[validDates.length-1] : 'نامشخص' };
+}
+
+function reportOk(result, name){
+  uploadStatus.className = 'upload-status ok';
+  uploadStatus.textContent = '✓ بروزرسانی شد از «' + name + '» — ' + result.rows.toLocaleString('fa-IR') + ' ردیف، آخرین تاریخ ثبت‌شده: ' + result.lastDate + ' (' + new Date().toLocaleTimeString('fa-IR') + ')';
+}
+function reportErr(msg){
+  uploadStatus.className = 'upload-status err';
+  uploadStatus.textContent = '✗ ' + msg;
+}
+
+// classic <input type=file> path — always available, used as fallback and
+// for "تغییر فایل"
+fileInput.addEventListener('change', async function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  uploadStatus.className = 'upload-status';
+  uploadStatus.textContent = 'در حال خواندن «' + file.name + '»...';
+  try {
+    const buf = await file.arrayBuffer();
+    const result = await loadFromWorkbookBuffer(buf);
+    reportOk(result, file.name);
+  } catch(err){
+    reportErr('خطا در خواندن فایل: ' + err.message);
+    console.error(err);
+  }
+});
+
+// "بروزرسانی" button — one click. First time: opens a picker (File System
+// Access API when available, so the handle can be remembered; otherwise the
+// classic picker). Every time after: silently re-reads the same file.
+btnRefresh.addEventListener('click', async function(){
+  // اگر به OneDrive وصل هستیم، دکمه بروزرسانی همان فایل آنلاین را دوباره می‌خواند
+  const odRef = odGetSavedRef();
+  if (odAccount && odRef) {
+    await odLoadFromRef(odRef, false);
+    return;
+  }
+  if(!supportsFSAccess){
+    fileInput.click();
+    return;
+  }
+  try {
+    let handle = await idbGetHandle();
+    if(handle){
+      const perm = await handle.queryPermission({mode:'read'});
+      if(perm !== 'granted'){
+        const req = await handle.requestPermission({mode:'read'});
+        if(req !== 'granted') throw new Error('اجازه خواندن فایل داده نشد.');
+      }
+    } else {
+      [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'Excel files', accept: {'application/octet-stream': ['.xlsb','.xlsx','.xls']} }]
+      });
+      await idbSetHandle(handle);
+    }
+    uploadStatus.className = 'upload-status';
+    uploadStatus.textContent = 'در حال خواندن «' + handle.name + '»...';
+    const file = await handle.getFile();
+    const buf = await file.arrayBuffer();
+    const result = await loadFromWorkbookBuffer(buf);
+    reportOk(result, handle.name);
+  } catch(err){
+    if(err.name === 'AbortError') return; // person cancelled the picker
+    reportErr('خطا: ' + err.message);
+    console.error(err);
+  }
+});
+
+// On page load: if a file was already connected before and the browser still
+// has silent read permission for it (no prompt needed), refresh from it
+// automatically — this is the fully hands-off case. (Only relevant to the
+// local-file fallback; skipped entirely once OneDrive is connected.)
+(async function autoLoadOnStart(){
+  if(!supportsFSAccess) return;
+  if(odGetSavedRef()) return; // OneDrive is the active source — don't fight over the UI
+  try {
+    const handle = await idbGetHandle();
+    if(!handle) return;
+    const perm = await handle.queryPermission({mode:'read'});
+    if(perm !== 'granted') {
+      uploadStatus.className = 'upload-status';
+      uploadStatus.textContent = 'یک فایل قبلاً متصل شده («' + handle.name + '») — برای بروزرسانی روی دکمه «🔄 بروزرسانی» بزنید (مرورگر یک‌بار اجازه دسترسی می‌خواهد).';
+      return;
+    }
+    const file = await handle.getFile();
+    const buf = await file.arrayBuffer();
+    const result = await loadFromWorkbookBuffer(buf);
+    reportOk(result, handle.name);
+  } catch(err){
+    console.error(err);
+  }
+})();
+
+// ==========================================================================
+// OneDrive online sync (Microsoft Graph + MSAL.js)
+// ==========================================================================
+// این بخش با حساب مایکروسافت شما وارد می‌شود، اجازه‌ی خواندن OneDrive را
+// می‌گیرد، فایل اکسل را یک‌بار با یک انتخاب‌گر ساده پیدا می‌کند و از آن پس
+// هر چند دقیقه (و هر بار که تب دوباره فعال شود) همان فایل را از OneDrive
+// دوباره دانلود و بازخوانی می‌کند — یعنی با هر تغییری که در اکسلِ آنلاین
+// ایجاد کنید، داشبورد بدون نیاز به کلیک، خودش بروز می‌شود.
+//
+// راه‌اندازی (یک‌بار، توسط مدیر داشبورد):
+//   ۱) یک اپلیکیشن در https://portal.azure.com > App registrations بسازید.
+//   ۲) Redirect URI را از نوع "Single-page application" و برابر با همان
+//      آدرسی که این فایل روی آن میزبانی می‌شود (مثلاً آدرس GitHub Pages) ثبت کنید.
+//   ۳) Client ID ساخته‌شده را در خط CLIENT_ID پایین جایگزین کنید.
+//   ۴) از بخش API permissions مجوز Files.Read.All (Delegated, Microsoft Graph)
+//      را اضافه کنید.
+// ==========================================================================
+
+const MSAL_CONFIG = {
+  auth: {
+    clientId: 'PASTE-YOUR-AZURE-APP-CLIENT-ID-HERE',
+    authority: 'https://login.microsoftonline.com/common',
+    redirectUri: window.location.origin + window.location.pathname
+  },
+  cache: { cacheLocation: 'localStorage' }
+};
+const GRAPH_SCOPES = ['User.Read', 'Files.Read', 'Files.Read.All'];
+const OD_REF_KEY = 'headKhaliOneDriveRef';
+const OD_REFRESH_MS = 5 * 60 * 1000; // بازخوانی خودکار هر ۵ دقیقه
+
+const btnSignIn = document.getElementById('btnSignIn');
+const btnPickOD = document.getElementById('btnPickOD');
+const odModal = document.getElementById('odModal');
+const odList = document.getElementById('odList');
+const odSearchInput = document.getElementById('odSearch');
+
+let msalApp = null, odAccount = null, odTimer = null;
+
+function odGetSavedRef(){ try { return JSON.parse(localStorage.getItem(OD_REF_KEY)); } catch(e){ return null; } }
+function odSaveRef(ref){ localStorage.setItem(OD_REF_KEY, JSON.stringify(ref)); }
+
+function odOnSignedIn(){
+  btnSignIn.textContent = '✓ ' + (odAccount.username || 'وارد شده با مایکروسافت');
+  btnPickOD.hidden = false;
+  btnRefresh.hidden = false;
+}
+
+async function odInitMsal(){
+  if (!window.msal) { reportErr('کتابخانه ورود با مایکروسافت بارگذاری نشد (اتصال اینترنت را بررسی کنید).'); return false; }
+  if (MSAL_CONFIG.auth.clientId.indexOf('PASTE-') === 0) {
+    reportErr('برای اتصال به OneDrive، ابتدا Client ID اپلیکیشن Azure باید داخل فایل جایگذاری شود (به راهنمای بالای این بخش در کد نگاه کنید).');
+    return false;
+  }
+  if (!msalApp) {
+    msalApp = new msal.PublicClientApplication(MSAL_CONFIG);
+    await msalApp.initialize();
+  }
+  const accounts = msalApp.getAllAccounts();
+  if (accounts.length > 0) { odAccount = accounts[0]; odOnSignedIn(); }
+  return true;
+}
+
+async function odGetToken(){
+  const req = { scopes: GRAPH_SCOPES, account: odAccount };
+  try {
+    const r = await msalApp.acquireTokenSilent(req);
+    return r.accessToken;
+  } catch(e){
+    const r = await msalApp.acquireTokenPopup(req);
+    return r.accessToken;
+  }
+}
+
+btnSignIn.addEventListener('click', async function(){
+  const ok = await odInitMsal();
+  if (!ok) return;
+  if (odAccount) { btnPickOD.hidden = false; btnRefresh.hidden = false; return; }
+  try {
+    const res = await msalApp.loginPopup({ scopes: GRAPH_SCOPES });
+    odAccount = res.account;
+    odOnSignedIn();
+    uploadStatus.className = 'upload-status';
+    uploadStatus.textContent = 'وارد شدید. حالا روی «☁️ انتخاب فایل از OneDrive» بزنید و فایل اکسل را یک‌بار انتخاب کنید.';
+  } catch(err){
+    reportErr('خطا در ورود: ' + err.message);
+  }
+});
+
+async function odGraphFetch(path){
+  const token = await odGetToken();
+  const res = await fetch('https://graph.microsoft.com/v1.0' + path, { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) throw new Error('خطای Graph API: ' + res.status);
+  return res.json();
+}
+
+function odRenderList(items){
+  items = items.slice().sort(function(a,b){
+    const af = a.folder ? 0 : 1, bf = b.folder ? 0 : 1;
+    return af - bf || a.name.localeCompare(b.name, 'fa');
+  });
+  odList.innerHTML = '';
+  if (!items.length) { odList.innerHTML = '<div class="muted" style="padding:10px;">پوشه خالی است.</div>'; return; }
+  items.forEach(function(it){
+    const row = document.createElement('div');
+    row.className = 'od-item';
+    const isExcel = it.file && /\.(xlsx|xlsb|xls)$/i.test(it.name);
+    row.textContent = (it.folder ? '📁 ' : (isExcel ? '📊 ' : '📄 ')) + it.name;
+    if (it.folder) {
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', function(){ odBrowse(it.id); });
+    } else if (isExcel) {
+      row.style.cursor = 'pointer';
+      row.classList.add('od-item-excel');
+      row.addEventListener('click', function(){ odSelectFile(it); });
+    } else {
+      row.style.opacity = '0.5';
+    }
+    odList.appendChild(row);
+  });
+}
+
+async function odBrowse(itemId){
+  odList.innerHTML = '<div class="muted" style="padding:10px;">در حال بارگذاری...</div>';
+  try {
+    const suffix = '/children?$top=200&$select=id,name,folder,file';
+    const path = itemId === 'root' ? '/me/drive/root' + suffix : '/me/drive/items/' + itemId + suffix;
+    const data = await odGraphFetch(path);
+    odRenderList(data.value || []);
+  } catch(e){
+    odList.innerHTML = '<div class="upload-status err" style="padding:10px;">خطا: ' + e.message + '</div>';
+  }
+}
+
+let odSearchTimer = null;
+odSearchInput.addEventListener('input', function(){
+  clearTimeout(odSearchTimer);
+  const q = odSearchInput.value.trim();
+  odSearchTimer = setTimeout(async function(){
+    if (!q) { odBrowse('root'); return; }
+    odList.innerHTML = '<div class="muted" style="padding:10px;">در حال جستجو...</div>';
+    try {
+      const data = await odGraphFetch("/me/drive/root/search(q='" + encodeURIComponent(q) + "')?$top=50&$select=id,name,folder,file");
+      odRenderList(data.value || []);
+    } catch(e){
+      odList.innerHTML = '<div class="upload-status err" style="padding:10px;">خطا: ' + e.message + '</div>';
+    }
+  }, 450);
+});
+
+btnPickOD.addEventListener('click', function(){ odModal.hidden = false; odSearchInput.value = ''; odBrowse('root'); });
+document.getElementById('odModalClose').addEventListener('click', function(){ odModal.hidden = true; });
+odModal.addEventListener('click', function(e){ if (e.target === odModal) odModal.hidden = true; });
+
+async function odLoadFromRef(ref, silent){
+  try {
+    if (!silent) { uploadStatus.className = 'upload-status'; uploadStatus.textContent = 'در حال خواندن «' + ref.name + '» از OneDrive...'; }
+    const token = await odGetToken();
+    const res = await fetch('https://graph.microsoft.com/v1.0/me/drive/items/' + ref.id + '/content', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('دریافت فایل ناموفق بود (کد ' + res.status + ')');
+    const buf = await res.arrayBuffer();
+    const result = await loadFromWorkbookBuffer(buf);
+    reportOk(result, ref.name + ' — OneDrive');
+  } catch(err){
+    if (!silent) reportErr('خطا: ' + err.message);
+    console.error(err);
+  }
+}
+
+function odStartAutoRefresh(){
+  if (odTimer) clearInterval(odTimer);
+  odTimer = setInterval(function(){
+    const ref = odGetSavedRef();
+    if (ref && odAccount) odLoadFromRef(ref, true);
+  }, OD_REFRESH_MS);
+}
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState !== 'visible') return;
+  const ref = odGetSavedRef();
+  if (ref && odAccount) odLoadFromRef(ref, true);
+});
+
+async function odSelectFile(it){
+  const ref = { id: it.id, name: it.name };
+  odSaveRef(ref);
+  odModal.hidden = true;
+  await odLoadFromRef(ref, false);
+  odStartAutoRefresh();
+}
+
+// تلاش برای ورود خودکار و بی‌صدا اگر قبلاً وارد شده بودید و فایلی متصل بود
+(async function odAutoStart(){
+  const ok = await odInitMsal();
+  if (!ok || !odAccount) return;
+  const ref = odGetSavedRef();
+  if (ref) { await odLoadFromRef(ref, true); odStartAutoRefresh(); }
+})();
+</script>
+</body>
+</html>
