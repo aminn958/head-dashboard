@@ -7,7 +7,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://alcdn.msauth.net/browser/3.24.0/js/msal-browser.min.js"></script>
 <style>
   * { box-sizing: border-box; } [hidden] { display: none !important; }
   body {
@@ -102,22 +101,10 @@
   <h1>داشبورد هد های خراب دستگاه ها</h1>
 
   <div class="upload-bar">
-    <button id="btnSignIn" class="upload-btn">🔐 ورود با مایکروسافت</button>
-    <button id="btnPickOD" class="upload-btn" style="background:#2e8f4f;" hidden>☁️ انتخاب فایل از OneDrive</button>
-    <button id="btnRefresh" class="upload-btn" style="border:none;" hidden>🔄 بروزرسانی</button>
+    <button id="btnRefresh" class="upload-btn">🔄 بروزرسانی از OneDrive</button>
     <label class="upload-btn" for="fileInput" style="background:#9b9a94;">📂 فایل محلی (جایگزین)</label>
     <input type="file" id="fileInput" accept=".xlsb,.xlsx,.xls">
-    <div class="upload-status" id="uploadStatus">برای اتصال زنده به OneDrive، روی «ورود با مایکروسافت» بزنید و فایل اکسل را یک‌بار از OneDrive انتخاب کنید — از آن پس با هر تغییر در اکسل، داشبورد خودکار بروزرسانی می‌شود.</div>
-  </div>
-
-  <div id="odModal" class="od-modal-overlay" hidden>
-    <div class="od-modal">
-      <div class="od-modal-header">
-        <input type="text" id="odSearch" placeholder="جستجوی نام فایل اکسل در OneDrive...">
-        <button id="odModalClose" type="button">✕</button>
-      </div>
-      <div class="od-modal-list" id="odList"></div>
-    </div>
+    <div class="upload-status" id="uploadStatus">در حال دریافت آخرین نسخه فایل از OneDrive...</div>
   </div>
 
   <div class="filters">
@@ -780,47 +767,7 @@ function extractMonthlyFromWorkbook(wb, sheetName, dateCol, hoursCol, prodCol, h
 
 const fileInput = document.getElementById('fileInput');
 const uploadStatus = document.getElementById('uploadStatus');
-
-// ==========================================================================
-// One-click refresh — remembers which file the person picked (via the File
-// System Access API, in browsers that support it: Chrome/Edge) so future
-// visits can re-read the SAME file with a single click on "بروزرسانی",
-// no folder browsing needed. Falls back to the plain file picker everywhere
-// else (Firefox/Safari, or if the file was opened over file:// in a way that
-// blocks the API).
-// ==========================================================================
-
 const btnRefresh = document.getElementById('btnRefresh');
-const supportsFSAccess = 'showOpenFilePicker' in window;
-
-// tiny IndexedDB key-value helper (native handles are structured-cloneable)
-const HANDLE_DB = 'headKhaliDashboardDB', HANDLE_STORE = 'handles', HANDLE_KEY = 'sourceFile';
-function idbOpen(){
-  return new Promise((resolve, reject)=>{
-    const req = indexedDB.open(HANDLE_DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(HANDLE_STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-async function idbSetHandle(handle){
-  const db = await idbOpen();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(HANDLE_STORE, 'readwrite');
-    tx.objectStore(HANDLE_STORE).put(handle, HANDLE_KEY);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function idbGetHandle(){
-  const db = await idbOpen();
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction(HANDLE_STORE, 'readonly');
-    const req = tx.objectStore(HANDLE_STORE).get(HANDLE_KEY);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-}
 
 async function loadFromWorkbookBuffer(buf){
   const wb = XLSX.read(buf, {type:'array'});
@@ -876,269 +823,56 @@ fileInput.addEventListener('change', async function(e){
   }
 });
 
-// "بروزرسانی" button — one click. First time: opens a picker (File System
-// Access API when available, so the handle can be remembered; otherwise the
-// classic picker). Every time after: silently re-reads the same file.
-btnRefresh.addEventListener('click', async function(){
-  // اگر به OneDrive وصل هستیم، دکمه بروزرسانی همان فایل آنلاین را دوباره می‌خواند
-  const odRef = odGetSavedRef();
-  if (odAccount && odRef) {
-    await odLoadFromRef(odRef, false);
-    return;
-  }
-  if(!supportsFSAccess){
-    fileInput.click();
-    return;
-  }
-  try {
-    let handle = await idbGetHandle();
-    if(handle){
-      const perm = await handle.queryPermission({mode:'read'});
-      if(perm !== 'granted'){
-        const req = await handle.requestPermission({mode:'read'});
-        if(req !== 'granted') throw new Error('اجازه خواندن فایل داده نشد.');
-      }
-    } else {
-      [handle] = await window.showOpenFilePicker({
-        types: [{ description: 'Excel files', accept: {'application/octet-stream': ['.xlsb','.xlsx','.xls']} }]
-      });
-      await idbSetHandle(handle);
-    }
-    uploadStatus.className = 'upload-status';
-    uploadStatus.textContent = 'در حال خواندن «' + handle.name + '»...';
-    const file = await handle.getFile();
-    const buf = await file.arrayBuffer();
-    const result = await loadFromWorkbookBuffer(buf);
-    reportOk(result, handle.name);
-  } catch(err){
-    if(err.name === 'AbortError') return; // person cancelled the picker
-    reportErr('خطا: ' + err.message);
-    console.error(err);
-  }
-});
-
-// On page load: if a file was already connected before and the browser still
-// has silent read permission for it (no prompt needed), refresh from it
-// automatically — this is the fully hands-off case. (Only relevant to the
-// local-file fallback; skipped entirely once OneDrive is connected.)
-(async function autoLoadOnStart(){
-  if(!supportsFSAccess) return;
-  if(odGetSavedRef()) return; // OneDrive is the active source — don't fight over the UI
-  try {
-    const handle = await idbGetHandle();
-    if(!handle) return;
-    const perm = await handle.queryPermission({mode:'read'});
-    if(perm !== 'granted') {
-      uploadStatus.className = 'upload-status';
-      uploadStatus.textContent = 'یک فایل قبلاً متصل شده («' + handle.name + '») — برای بروزرسانی روی دکمه «🔄 بروزرسانی» بزنید (مرورگر یک‌بار اجازه دسترسی می‌خواهد).';
-      return;
-    }
-    const file = await handle.getFile();
-    const buf = await file.arrayBuffer();
-    const result = await loadFromWorkbookBuffer(buf);
-    reportOk(result, handle.name);
-  } catch(err){
-    console.error(err);
-  }
-})();
-
 // ==========================================================================
-// OneDrive online sync (Microsoft Graph + MSAL.js)
+// OneDrive sync via Cloudflare Worker proxy
 // ==========================================================================
-// این بخش با حساب مایکروسافت شما وارد می‌شود، اجازه‌ی خواندن OneDrive را
-// می‌گیرد، فایل اکسل را یک‌بار با یک انتخاب‌گر ساده پیدا می‌کند و از آن پس
-// هر چند دقیقه (و هر بار که تب دوباره فعال شود) همان فایل را از OneDrive
-// دوباره دانلود و بازخوانی می‌کند — یعنی با هر تغییری که در اکسلِ آنلاین
-// ایجاد کنید، داشبورد بدون نیاز به کلیک، خودش بروز می‌شود.
-//
-// راه‌اندازی (یک‌بار، توسط مدیر داشبورد):
-//   ۱) یک اپلیکیشن در https://portal.azure.com > App registrations بسازید.
-//   ۲) Redirect URI را از نوع "Single-page application" و برابر با همان
-//      آدرسی که این فایل روی آن میزبانی می‌شود (مثلاً آدرس GitHub Pages) ثبت کنید.
-//   ۳) Client ID ساخته‌شده را در خط CLIENT_ID پایین جایگزین کنید.
-//   ۴) از بخش API permissions مجوز Files.Read.All (Delegated, Microsoft Graph)
-//      را اضافه کنید.
+// این داشبورد فایل اکسل را از طریق یک Cloudflare Worker کوچک (به نام
+// head-dashboard-onedrive) می‌خواند که همیشه آخرین نسخه‌ی فایل را نگه
+// می‌دارد. خودِ فایل توسط یک اسکریپت کوچک که روی سیستمی با OneDrive
+// سینک‌شده اجرا می‌شود، به‌صورت دوره‌ای به Worker آپلود می‌شود. این
+// داشبورد فقط از آدرس /data روی Worker می‌خواند — هیچ ورود یا لاگینی
+// برای دیدن داشبورد لازم نیست.
 // ==========================================================================
 
-const MSAL_CONFIG = {
-  auth: {
-    clientId: '70d459bf-d568-4d5f-bf92-0b77226c3b03',
-    authority: 'https://login.microsoftonline.com/common',
-    redirectUri: window.location.origin + window.location.pathname
-  },
-  cache: { cacheLocation: 'localStorage' }
-};
-const GRAPH_SCOPES = ['User.Read', 'Files.Read', 'Files.Read.All'];
-const OD_REF_KEY = 'headKhaliOneDriveRef';
-const OD_REFRESH_MS = 5 * 60 * 1000; // بازخوانی خودکار هر ۵ دقیقه
+const WORKER_URL = 'https://head-dashboard-onedrive.pr-781.workers.dev';
+const WORKER_REFRESH_MS = 5 * 60 * 1000; // بازخوانی خودکار هر ۵ دقیقه
+let workerTimer = null;
 
-const btnSignIn = document.getElementById('btnSignIn');
-const btnPickOD = document.getElementById('btnPickOD');
-const odModal = document.getElementById('odModal');
-const odList = document.getElementById('odList');
-const odSearchInput = document.getElementById('odSearch');
-
-let msalApp = null, odAccount = null, odTimer = null;
-
-function odGetSavedRef(){ try { return JSON.parse(localStorage.getItem(OD_REF_KEY)); } catch(e){ return null; } }
-function odSaveRef(ref){ localStorage.setItem(OD_REF_KEY, JSON.stringify(ref)); }
-
-function odOnSignedIn(){
-  btnSignIn.textContent = '✓ ' + (odAccount.username || 'وارد شده با مایکروسافت');
-  btnPickOD.hidden = false;
-  btnRefresh.hidden = false;
-}
-
-async function odInitMsal(){
-  if (!window.msal) { reportErr('کتابخانه ورود با مایکروسافت بارگذاری نشد (اتصال اینترنت را بررسی کنید).'); return false; }
-  if (MSAL_CONFIG.auth.clientId.indexOf('PASTE-') === 0) {
-    reportErr('برای اتصال به OneDrive، ابتدا Client ID اپلیکیشن Azure باید داخل فایل جایگذاری شود (به راهنمای بالای این بخش در کد نگاه کنید).');
-    return false;
-  }
-  if (!msalApp) {
-    msalApp = new msal.PublicClientApplication(MSAL_CONFIG);
-    await msalApp.initialize();
-  }
-  const accounts = msalApp.getAllAccounts();
-  if (accounts.length > 0) { odAccount = accounts[0]; odOnSignedIn(); }
-  return true;
-}
-
-async function odGetToken(){
-  const req = { scopes: GRAPH_SCOPES, account: odAccount };
+async function loadFromWorker(silent){
   try {
-    const r = await msalApp.acquireTokenSilent(req);
-    return r.accessToken;
-  } catch(e){
-    const r = await msalApp.acquireTokenPopup(req);
-    return r.accessToken;
-  }
-}
-
-btnSignIn.addEventListener('click', async function(){
-  const ok = await odInitMsal();
-  if (!ok) return;
-  if (odAccount) { btnPickOD.hidden = false; btnRefresh.hidden = false; return; }
-  try {
-    const res = await msalApp.loginPopup({ scopes: GRAPH_SCOPES });
-    odAccount = res.account;
-    odOnSignedIn();
-    uploadStatus.className = 'upload-status';
-    uploadStatus.textContent = 'وارد شدید. حالا روی «☁️ انتخاب فایل از OneDrive» بزنید و فایل اکسل را یک‌بار انتخاب کنید.';
-  } catch(err){
-    reportErr('خطا در ورود: ' + err.message);
-  }
-});
-
-async function odGraphFetch(path){
-  const token = await odGetToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0' + path, { headers: { Authorization: 'Bearer ' + token } });
-  if (!res.ok) throw new Error('خطای Graph API: ' + res.status);
-  return res.json();
-}
-
-function odRenderList(items){
-  items = items.slice().sort(function(a,b){
-    const af = a.folder ? 0 : 1, bf = b.folder ? 0 : 1;
-    return af - bf || a.name.localeCompare(b.name, 'fa');
-  });
-  odList.innerHTML = '';
-  if (!items.length) { odList.innerHTML = '<div class="muted" style="padding:10px;">پوشه خالی است.</div>'; return; }
-  items.forEach(function(it){
-    const row = document.createElement('div');
-    row.className = 'od-item';
-    const isExcel = it.file && /\.(xlsx|xlsb|xls)$/i.test(it.name);
-    row.textContent = (it.folder ? '📁 ' : (isExcel ? '📊 ' : '📄 ')) + it.name;
-    if (it.folder) {
-      row.style.cursor = 'pointer';
-      row.addEventListener('click', function(){ odBrowse(it.id); });
-    } else if (isExcel) {
-      row.style.cursor = 'pointer';
-      row.classList.add('od-item-excel');
-      row.addEventListener('click', function(){ odSelectFile(it); });
-    } else {
-      row.style.opacity = '0.5';
+    if (!silent) { uploadStatus.className = 'upload-status'; uploadStatus.textContent = 'در حال دریافت آخرین نسخه فایل از OneDrive...'; }
+    const res = await fetch(WORKER_URL + '/data', { cache: 'no-store' });
+    if (res.status === 404) {
+      uploadStatus.className = 'upload-status err';
+      uploadStatus.textContent = '✗ هنوز فایلی از OneDrive آپلود نشده است. از «📂 فایل محلی» برای بارگذاری دستی استفاده کنید.';
+      return false;
     }
-    odList.appendChild(row);
-  });
-}
-
-async function odBrowse(itemId){
-  odList.innerHTML = '<div class="muted" style="padding:10px;">در حال بارگذاری...</div>';
-  try {
-    const suffix = '/children?$top=200&$select=id,name,folder,file';
-    const path = itemId === 'root' ? '/me/drive/root' + suffix : '/me/drive/items/' + itemId + suffix;
-    const data = await odGraphFetch(path);
-    odRenderList(data.value || []);
-  } catch(e){
-    odList.innerHTML = '<div class="upload-status err" style="padding:10px;">خطا: ' + e.message + '</div>';
-  }
-}
-
-let odSearchTimer = null;
-odSearchInput.addEventListener('input', function(){
-  clearTimeout(odSearchTimer);
-  const q = odSearchInput.value.trim();
-  odSearchTimer = setTimeout(async function(){
-    if (!q) { odBrowse('root'); return; }
-    odList.innerHTML = '<div class="muted" style="padding:10px;">در حال جستجو...</div>';
-    try {
-      const data = await odGraphFetch("/me/drive/root/search(q='" + encodeURIComponent(q) + "')?$top=50&$select=id,name,folder,file");
-      odRenderList(data.value || []);
-    } catch(e){
-      odList.innerHTML = '<div class="upload-status err" style="padding:10px;">خطا: ' + e.message + '</div>';
-    }
-  }, 450);
-});
-
-btnPickOD.addEventListener('click', function(){ odModal.hidden = false; odSearchInput.value = ''; odBrowse('root'); });
-document.getElementById('odModalClose').addEventListener('click', function(){ odModal.hidden = true; });
-odModal.addEventListener('click', function(e){ if (e.target === odModal) odModal.hidden = true; });
-
-async function odLoadFromRef(ref, silent){
-  try {
-    if (!silent) { uploadStatus.className = 'upload-status'; uploadStatus.textContent = 'در حال خواندن «' + ref.name + '» از OneDrive...'; }
-    const token = await odGetToken();
-    const res = await fetch('https://graph.microsoft.com/v1.0/me/drive/items/' + ref.id + '/content', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
     if (!res.ok) throw new Error('دریافت فایل ناموفق بود (کد ' + res.status + ')');
     const buf = await res.arrayBuffer();
     const result = await loadFromWorkbookBuffer(buf);
-    reportOk(result, ref.name + ' — OneDrive');
+    reportOk(result, 'OneDrive');
+    return true;
   } catch(err){
-    if (!silent) reportErr('خطا: ' + err.message);
+    if (!silent) reportErr('خطا در دریافت از OneDrive: ' + err.message);
     console.error(err);
+    return false;
   }
 }
 
-function odStartAutoRefresh(){
-  if (odTimer) clearInterval(odTimer);
-  odTimer = setInterval(function(){
-    const ref = odGetSavedRef();
-    if (ref && odAccount) odLoadFromRef(ref, true);
-  }, OD_REFRESH_MS);
+btnRefresh.addEventListener('click', function(){ loadFromWorker(false); });
+
+function startWorkerAutoRefresh(){
+  if (workerTimer) clearInterval(workerTimer);
+  workerTimer = setInterval(function(){ loadFromWorker(true); }, WORKER_REFRESH_MS);
 }
 document.addEventListener('visibilitychange', function(){
   if (document.visibilityState !== 'visible') return;
-  const ref = odGetSavedRef();
-  if (ref && odAccount) odLoadFromRef(ref, true);
+  loadFromWorker(true);
 });
 
-async function odSelectFile(it){
-  const ref = { id: it.id, name: it.name };
-  odSaveRef(ref);
-  odModal.hidden = true;
-  await odLoadFromRef(ref, false);
-  odStartAutoRefresh();
-}
-
-// تلاش برای ورود خودکار و بی‌صدا اگر قبلاً وارد شده بودید و فایلی متصل بود
-(async function odAutoStart(){
-  const ok = await odInitMsal();
-  if (!ok || !odAccount) return;
-  const ref = odGetSavedRef();
-  if (ref) { await odLoadFromRef(ref, true); odStartAutoRefresh(); }
+(async function workerAutoStart(){
+  await loadFromWorker(false);
+  startWorkerAutoRefresh();
 })();
 </script>
 </body>
